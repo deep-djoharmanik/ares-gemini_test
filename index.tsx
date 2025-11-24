@@ -126,7 +126,7 @@ const shareImage = async (dataUrl: string, title: string, text: string) => {
 // We no longer use a global static instance. We create one on demand with the user's key.
 const getAI = (apiKey: string) => {
   if (!apiKey) throw new Error("API Key is missing");
-  return new GoogleGenAI({ apiKey });
+  return new GoogleGenAI({ apiKey: apiKey.trim() });
 };
 
 const safetySettings = [
@@ -605,13 +605,27 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
           imageConfig: {
             aspectRatio: aspectRatio as any
           },
-          safetySettings: safetySettings as any
+          // Removing safetySettings here as they can cause 400s on some image keys if set explicitly
         }
       });
 
       if (!loading && !abortControllerRef.current) return;
 
-      for (const part of response.candidates?.[0]?.content?.parts || []) {
+      const candidates = response.candidates;
+      if (!candidates || candidates.length === 0) {
+        throw new Error("No image generated. The prompt might have been blocked by safety filters.");
+      }
+      
+      // Check for finish reason if available
+      if (candidates[0].finishReason && candidates[0].finishReason !== 'STOP') {
+         // If finishReason is SAFETY, we can throw a specific error
+         if (candidates[0].finishReason === 'SAFETY') {
+             throw new Error("Generation blocked by safety filters. Please try a different prompt.");
+         }
+      }
+
+      let foundImage = false;
+      for (const part of candidates[0]?.content?.parts || []) {
         if (part.inlineData) {
           const imageUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
           setGeneratedImage(imageUrl);
@@ -622,13 +636,19 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
             prompt: constructedPrompt,
             timestamp: Date.now()
           });
+          foundImage = true;
           break;
         }
       }
-    } catch (error) {
+
+      if (!foundImage) {
+          throw new Error("Model response did not contain an image.");
+      }
+
+    } catch (error: any) {
       if (loading) {
-        console.error(error);
-        alert('Failed to generate image. Please check your API key and try again.');
+        console.error("Generation Error:", error);
+        alert(`Error: ${error.message || "Failed to generate image. Please check your API key."}`);
       }
     } finally {
       setLoading(false);
@@ -874,7 +894,7 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
             { text: prompt }
           ]
         },
-        config: { safetySettings: safetySettings as any }
+        // Removing explicit safety settings to avoid 400 errors on some keys
       });
 
       for (const part of response.candidates?.[0]?.content?.parts || []) {
@@ -891,9 +911,9 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
           break;
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert('Failed to edit image. Check API key and try again.');
+      alert(`Error: ${error.message || 'Failed to edit image. Check API key.'}`);
     } finally {
       setLoading(false);
     }
