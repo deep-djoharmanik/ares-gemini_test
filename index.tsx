@@ -23,33 +23,21 @@ import {
   Share2,
   ZoomIn,
   ZoomOut,
-  Move,
   RotateCcw,
   Check,
-  Palette,
-  MonitorPlay,
-  Type,
-  Box,
   ChevronDown,
   ChevronUp,
-  Aperture,
-  User,
-  Sun,
-  Camera,
-  Scissors,
-  Zap,
   Settings,
   Key,
   LogOut,
   Eye,
   EyeOff,
-  Github,
-  Code2,
-  AlertTriangle,
-  RefreshCw,
-  Info,
+  Scissors,
+  MonitorPlay,
+  Zap,
   Clock,
-  Layout
+  AlertTriangle,
+  Menu
 } from 'lucide-react';
 
 // --- Types & Interfaces ---
@@ -185,19 +173,19 @@ const permissiveSafetySettings = [
 // --- UI Components ---
 
 const Button = ({ children, onClick, disabled, variant = 'primary', className = '', icon: Icon, size='md' }: any) => {
-  const baseStyle = "flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900";
+  const baseStyle = "flex items-center justify-center gap-2 rounded-lg font-medium transition-all duration-200 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]";
   const sizes = {
     sm: "px-3 py-1.5 text-xs",
-    md: "px-4 py-2 text-sm",
+    md: "px-4 py-2.5 text-sm",
     lg: "px-6 py-3 text-base"
   };
   
   const variants = {
-    primary: "bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/50 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed",
-    secondary: "bg-slate-700 hover:bg-slate-600 text-slate-100 focus:ring-slate-500 disabled:opacity-50",
-    ghost: "bg-transparent hover:bg-slate-800 text-slate-400 hover:text-white focus:ring-slate-500",
-    danger: "bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/20 disabled:opacity-50",
-    outline: "border border-slate-700 hover:bg-slate-800 text-slate-300 disabled:opacity-50"
+    primary: "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-lg shadow-indigo-900/20 border border-indigo-500/50",
+    secondary: "bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700",
+    ghost: "bg-transparent hover:bg-white/5 text-slate-400 hover:text-white",
+    danger: "bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/20",
+    outline: "border border-slate-700 hover:border-slate-600 text-slate-300 bg-transparent"
   };
 
   return (
@@ -214,25 +202,24 @@ const Button = ({ children, onClick, disabled, variant = 'primary', className = 
 
 const IconButton = ({ onClick, icon: Icon, title, className = '', variant = 'default' }: any) => {
   const variants = {
-    default: "bg-slate-800/80 hover:bg-slate-700 text-slate-200",
-    danger: "bg-red-500/20 hover:bg-red-500/40 text-red-200",
-    primary: "bg-indigo-600/80 hover:bg-indigo-500 text-white"
+    default: "bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700",
+    danger: "bg-red-500/20 hover:bg-red-500/40 text-red-300 hover:text-white border border-red-500/30",
+    primary: "bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-400"
   };
   
   return (
     <button
       onClick={onClick}
       title={title}
-      className={`p-2.5 rounded-full backdrop-blur-md transition-all active:scale-95 ${variants[variant as keyof typeof variants]} ${className}`}
+      className={`p-2 rounded-lg transition-all active:scale-95 ${variants[variant as keyof typeof variants]} ${className}`}
     >
-      <Icon size={20} />
+      <Icon size={18} />
     </button>
   );
 };
 
 // --- Updated Components (Zoom, Modal, Input) ---
 
-// IMPROVED: Smoother Pan/Zoom that doesn't hijack scroll
 const PanZoomImage = ({ src, alt, className = '' }: { src: string, alt?: string, className?: string }) => {
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -270,7 +257,7 @@ const PanZoomImage = ({ src, alt, className = '' }: { src: string, alt?: string,
 
   return (
     <div 
-        className={`relative overflow-hidden w-full h-full flex items-center justify-center bg-slate-950/50 ${className}`}
+        className={`relative overflow-hidden w-full h-full flex items-center justify-center bg-[#050505] ${className}`}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -287,13 +274,12 @@ const PanZoomImage = ({ src, alt, className = '' }: { src: string, alt?: string,
         }}
       />
       
-      {/* Explicit Zoom Controls - No Scroll Wheel */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3 bg-slate-900/90 backdrop-blur-md p-2 rounded-full border border-slate-700 shadow-2xl z-10" onClick={e => e.stopPropagation()}>
-         <button onClick={zoomOut} className="p-2 hover:bg-white/10 rounded-full text-slate-300 hover:text-white transition-colors" title="Zoom Out"><ZoomOut size={18}/></button>
-         <span className="text-xs text-slate-400 font-mono py-2 w-12 text-center border-l border-r border-slate-700">{Math.round(scale * 100)}%</span>
-         <button onClick={zoomIn} className="p-2 hover:bg-white/10 rounded-full text-slate-300 hover:text-white transition-colors" title="Zoom In"><ZoomIn size={18}/></button>
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-1 bg-black/80 backdrop-blur-xl p-1.5 rounded-full border border-white/10 shadow-2xl z-10">
+         <button onClick={zoomOut} className="p-2 hover:bg-white/10 rounded-full text-slate-300 hover:text-white transition-colors" title="Zoom Out"><ZoomOut size={16}/></button>
+         <span className="text-xs text-slate-400 font-mono py-2 w-12 text-center border-l border-r border-white/10 flex items-center justify-center">{Math.round(scale * 100)}%</span>
+         <button onClick={zoomIn} className="p-2 hover:bg-white/10 rounded-full text-slate-300 hover:text-white transition-colors" title="Zoom In"><ZoomIn size={16}/></button>
          {scale > 1 && (
-             <button onClick={reset} className="p-2 hover:bg-white/10 rounded-full text-indigo-400" title="Reset"><RotateCcw size={18}/></button>
+             <button onClick={reset} className="p-2 hover:bg-white/10 rounded-full text-indigo-400" title="Reset"><RotateCcw size={16}/></button>
          )}
       </div>
     </div>
@@ -318,26 +304,26 @@ const Lightbox = ({ src, prompt, onClose, onShare, onDelete, onUsePrompt, showDe
          {/* Top Controls */}
          <div className="absolute top-0 right-0 left-0 p-4 z-20 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
             <div className="pointer-events-auto px-4">
-                 <h3 className="text-white font-bold drop-shadow-md">Full Preview</h3>
+                 <h3 className="text-white font-bold drop-shadow-md flex items-center gap-2"><Maximize2 size={16} className="text-indigo-500"/> Full Preview</h3>
             </div>
             <div className="pointer-events-auto">
-                <IconButton onClick={onClose} icon={X} title="Close" variant="danger" />
+                <IconButton onClick={onClose} icon={X} title="Close" variant="danger" className="rounded-full" />
             </div>
          </div>
 
          {/* Image Area */}
-         <div className="flex-1 overflow-hidden bg-black/20 relative">
+         <div className="flex-1 overflow-hidden relative">
             <PanZoomImage src={src} />
          </div>
 
          {/* Bottom Controls */}
-         <div className="bg-slate-900 border-t border-slate-800 p-6 flex flex-col md:flex-row justify-between items-center gap-4 z-20 relative shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+         <div className="bg-black/90 border-t border-white/10 p-6 flex flex-col md:flex-row justify-between items-center gap-4 z-20 relative">
             <div className="flex-1 w-full md:max-w-3xl">
-              <p className="text-slate-200 text-sm line-clamp-2 font-medium mb-2 font-mono">{prompt}</p>
+              <p className="text-slate-300 text-xs line-clamp-2 font-medium mb-2 font-mono bg-slate-900/50 p-2 rounded border border-white/5">{prompt}</p>
               {onUsePrompt && (
-                  <button onClick={handleCopy} className="text-indigo-400 text-xs hover:text-indigo-300 flex items-center gap-1 transition-colors px-2 py-1 hover:bg-indigo-500/10 rounded">
+                  <button onClick={handleCopy} className="text-indigo-400 text-[10px] hover:text-indigo-300 flex items-center gap-1 transition-colors uppercase tracking-wider font-bold">
                       {copied ? <Check size={12} /> : <Copy size={12} />}
-                      {copied ? "Prompt Copied" : "Copy Prompt"}
+                      {copied ? "Copied" : "Copy Prompt"}
                   </button>
               )}
             </div>
@@ -347,7 +333,7 @@ const Lightbox = ({ src, prompt, onClose, onShare, onDelete, onUsePrompt, showDe
                  <IconButton onClick={onDelete} icon={Trash2} variant="danger" title="Delete" />
                )}
                <IconButton onClick={() => onShare && onShare()} icon={Share2} title="Share" />
-               <a href={src} download={`gemini-gen-${Date.now()}.png`} className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-900/30 text-sm">
+               <a href={src} download={`gemini-gen-${Date.now()}.png`} className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-900/30 text-sm">
                   <Download size={18} /> Download
                </a>
             </div>
@@ -362,31 +348,33 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string) => void }) => {
   const [showKey, setShowKey] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-         <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] bg-indigo-500/10 blur-[100px] rounded-full"></div>
-         <div className="absolute top-[20%] right-[10%] w-[40%] h-[40%] bg-purple-500/10 blur-[100px] rounded-full"></div>
+    <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      {/* Abstract Background */}
+      <div className="absolute inset-0 overflow-hidden">
+         <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-indigo-600/20 blur-[120px] rounded-full mix-blend-screen"></div>
+         <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-purple-600/20 blur-[120px] rounded-full mix-blend-screen"></div>
       </div>
 
-      <div className="relative z-10 w-full max-w-md bg-slate-900/50 backdrop-blur-xl border border-slate-800 p-8 rounded-3xl shadow-2xl animate-fade-in">
+      <div className="relative z-10 w-full max-w-md bg-slate-900/40 backdrop-blur-2xl border border-white/10 p-8 rounded-3xl shadow-2xl animate-fade-in">
          <div className="flex flex-col items-center mb-10">
-            <div className="w-20 h-20 bg-gradient-to-tr from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/30 mb-6 rotate-3">
-                <Sparkles size={40} className="text-white" />
+            <div className="w-16 h-16 bg-gradient-to-tr from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/30 mb-6 rotate-3 border border-white/20">
+                <Sparkles size={32} className="text-white" />
             </div>
-            <h1 className="text-3xl font-bold text-white tracking-tight text-center">Ares Suite</h1>
-            <p className="text-slate-400 mt-3 text-sm text-center">Enter your Google GenAI Key</p>
+            <h1 className="text-4xl font-bold text-white tracking-tight text-center">Ares Suite</h1>
+            <p className="text-slate-400 mt-2 text-sm text-center">Next-Gen AI Creative Studio</p>
          </div>
 
          <div className="space-y-6">
             <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">API Key</label>
                 <div className="relative group">
-                   <div className="relative flex items-center bg-slate-950 border border-slate-800 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:border-indigo-500 transition-all">
+                   <div className="relative flex items-center bg-black/50 border border-white/10 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:border-indigo-500 transition-all">
                        <div className="pl-4 text-slate-500"><Key size={18} /></div>
                        <input 
                           type={showKey ? "text" : "password"} 
                           value={key}
                           onChange={(e) => setKey(e.target.value)}
-                          placeholder="AIzaSy..."
+                          placeholder="Paste Google AI Key here..."
                           className="w-full bg-transparent border-none px-4 py-4 text-slate-200 focus:ring-0 outline-none font-mono text-sm"
                           autoFocus
                        />
@@ -399,7 +387,7 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string) => void }) => {
             <button 
                 onClick={() => onLogin(key)}
                 disabled={!key.trim() || key.length < 10}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold py-4 rounded-xl transition-all shadow-lg"
+                className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold py-4 rounded-xl transition-all shadow-lg hover:shadow-indigo-500/25 active:scale-[0.99]"
             >
                 Enter Studio
             </button>
@@ -414,16 +402,16 @@ const ApiKeyModal = ({ isOpen, onSave, onClose, initialKey }: { isOpen: boolean,
   const [showKey, setShowKey] = useState(false);
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl relative">
-          <h3 className="text-lg font-bold text-white mb-4">API Configuration</h3>
+    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+       <div className="glass-panel p-6 rounded-2xl w-full max-w-md shadow-2xl relative bg-slate-900/90">
+          <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Settings size={18} /> API Configuration</h3>
           <div className="space-y-4">
              <div className="relative">
                 <input 
                    type={showKey ? "text" : "password"} 
                    value={key}
                    onChange={(e) => setKey(e.target.value)}
-                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 pr-12 text-slate-200 outline-none font-mono text-sm"
+                   className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 pr-12 text-slate-200 outline-none font-mono text-sm focus:border-indigo-500 transition-colors"
                 />
                 <button onClick={() => setShowKey(!showKey)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">
                    {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -443,9 +431,9 @@ const PromptArea = ({ value, onChange, placeholder, className, label, onEnhance 
   return (
     <div className="flex flex-col gap-2 h-full">
       <div className="flex justify-between items-center">
-        {label && <label className="text-sm font-medium text-slate-300 ml-1">{label}</label>}
+        {label && <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">{label}</label>}
         {onEnhance && (
-            <button onClick={onEnhance} className="text-[10px] flex items-center gap-1.5 px-2 py-1 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 rounded-md border border-indigo-500/20">
+            <button onClick={onEnhance} className="text-[10px] flex items-center gap-1.5 px-2 py-1 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-300 rounded-md border border-indigo-500/20 transition-all">
                 <Wand2 size={12} /> Enhance
             </button>
         )}
@@ -454,22 +442,22 @@ const PromptArea = ({ value, onChange, placeholder, className, label, onEnhance 
           value={value}
           onChange={onChange}
           placeholder={placeholder}
-          className={`${className} scrollbar-hide resize-none`}
+          className={`${className} scrollbar-hide resize-none transition-all placeholder:text-slate-600`}
       />
     </div>
   );
 };
 
 const LoadingOverlay = ({ message, onStop }: { message: string, onStop?: () => void }) => (
-  <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center z-50 rounded-xl border border-indigo-500/20">
+  <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center z-50 rounded-xl">
     <div className="relative mb-6">
-      <div className="absolute inset-0 bg-indigo-500 blur-xl opacity-20 animate-pulse"></div>
-      <Loader2 className="w-12 h-12 text-indigo-500 animate-spin relative z-10" />
+      <div className="absolute inset-0 bg-indigo-500 blur-2xl opacity-20 animate-pulse"></div>
+      <Loader2 className="w-12 h-12 text-indigo-400 animate-spin relative z-10" />
     </div>
-    <p className="text-slate-200 font-medium animate-pulse mb-6 text-center px-4">{message}</p>
+    <p className="text-white font-medium animate-pulse mb-6 text-center px-4 tracking-wide">{message}</p>
     {onStop && (
-      <button onClick={onStop} className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-400 border border-red-500/20 rounded-full hover:bg-red-500/20 transition-colors text-sm">
-        <StopCircle size={16} /> Stop
+      <button onClick={onStop} className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-400 border border-red-500/20 rounded-full hover:bg-red-500/20 transition-colors text-xs uppercase font-bold tracking-wider">
+        <StopCircle size={14} /> Cancel
       </button>
     )}
   </div>
@@ -491,8 +479,7 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
   const [showZoom, setShowZoom] = useState(false);
   const [cooldown, setCooldown] = useState(0); 
   
-  const [quality, setQuality] = useState('Std (1k)');
-  const [styleExpanded, setStyleExpanded] = useState(true); // Open by default in split screen
+  const [styleExpanded, setStyleExpanded] = useState(true);
   const [artStyle, setArtStyle] = useState('None');
   const [lighting, setLighting] = useState('Auto');
   const [camera, setCamera] = useState('Auto');
@@ -668,98 +655,104 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
       )}
 
       {/* 50/50 Split Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full overflow-hidden">
         
         {/* Left Panel: Controls */}
-        <div className="bg-slate-900/50 rounded-2xl border border-slate-800 flex flex-col overflow-hidden h-full">
-            <div className="p-4 border-b border-slate-800 bg-slate-900/80 backdrop-blur-md">
-                <h3 className="font-semibold text-white flex items-center gap-2">
-                    <Wand2 size={16} className="text-indigo-400" /> Generator Controls
+        <div className="glass-panel rounded-2xl flex flex-col overflow-hidden h-full shadow-2xl">
+            <div className="p-4 border-b border-white/5 bg-slate-900/50">
+                <h3 className="font-bold text-white flex items-center gap-2 text-sm tracking-wide">
+                    <Wand2 size={16} className="text-indigo-400" /> GENERATOR
                 </h3>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6 scrollbar-hide">
+            <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-6 scrollbar-hide">
                 {/* Reference Images */}
                 <div className="flex flex-col gap-3">
                     <div className="flex justify-between items-center">
-                        <label className="text-xs font-bold text-slate-500 uppercase">Reference (Auto-Compress)</label>
-                        <span className="text-[10px] text-slate-500">{refImages.length}/4</span>
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Reference (Auto-Compress)</label>
+                        <span className="text-[10px] text-slate-500 font-mono">{refImages.length}/4</span>
                     </div>
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-4 gap-3">
                         {refPreviews.map((src, idx) => (
-                        <div key={idx} className="relative group aspect-square rounded-lg overflow-hidden border border-slate-700 bg-slate-800">
+                        <div key={idx} className="relative group aspect-square rounded-lg overflow-hidden border border-white/10 bg-slate-800">
                             <img src={src} className="w-full h-full object-cover" />
-                            <button onClick={() => removeRefImage(idx)} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white"><X size={16} /></button>
+                            <button onClick={() => removeRefImage(idx)} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity"><X size={16} /></button>
                         </div>
                         ))}
                         {refImages.length < 4 && (
-                        <label className="aspect-square rounded-lg border border-dashed border-slate-700 hover:border-indigo-500 hover:bg-slate-800 transition-all cursor-pointer flex flex-col items-center justify-center gap-1 text-slate-500 hover:text-indigo-400">
-                            <Plus size={16} />
+                        <label className="aspect-square rounded-lg border border-dashed border-slate-700 hover:border-indigo-500 hover:bg-indigo-500/10 transition-all cursor-pointer flex flex-col items-center justify-center gap-1 text-slate-500 hover:text-indigo-400">
+                            <Plus size={18} />
                             <input type="file" accept="image/*" multiple onChange={handleRefUpload} className="hidden" />
                         </label>
                         )}
                     </div>
                     {refImages.length > 0 && (
-                        <button onClick={() => setLockFace(!lockFace)} className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${lockFace ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
-                        {lockFace ? <Lock size={12} /> : <Unlock size={12} />} {lockFace ? 'Face Lock On' : 'Style Ref Only'}
+                        <button onClick={() => setLockFace(!lockFace)} className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all border ${lockFace ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/30' : 'bg-slate-800/50 text-slate-400 border-white/5'}`}>
+                        {lockFace ? <Lock size={12} /> : <Unlock size={12} />} {lockFace ? 'Mode: Face Lock (Experimental)' : 'Mode: Style Reference'}
                         </button>
                     )}
                 </div>
 
                 {/* Prompt */}
-                <div className="flex-1 min-h-[120px]">
+                <div className="flex-1 min-h-[140px]">
                     <PromptArea
-                        label="Describe Image"
+                        label="Prompt"
                         value={prompt}
                         onChange={(e: any) => setPrompt(e.target.value)}
                         onEnhance={handleEnhancePrompt}
-                        placeholder="A futuristic city with neon lights..."
-                        className="w-full h-full bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-slate-200 focus:ring-2 focus:ring-indigo-500 text-sm"
+                        placeholder="Describe your imagination..."
+                        className="w-full h-full bg-black/40 border border-white/10 rounded-xl p-4 text-slate-200 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-sm leading-relaxed"
                     />
                 </div>
 
                 {/* Settings Accordion */}
-                <div className="border border-slate-800 rounded-xl bg-slate-900/30 overflow-hidden">
-                    <button onClick={() => setStyleExpanded(!styleExpanded)} className="w-full flex justify-between items-center p-3 text-xs font-bold text-slate-400 uppercase hover:bg-slate-800/50">
+                <div className="border border-white/5 rounded-xl bg-black/20 overflow-hidden">
+                    <button onClick={() => setStyleExpanded(!styleExpanded)} className="w-full flex justify-between items-center p-3 text-xs font-bold text-slate-400 uppercase hover:bg-white/5 transition-colors">
                         <span>Config & Style</span>
                         {styleExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                     </button>
                     {styleExpanded && (
-                        <div className="p-3 pt-0 grid grid-cols-2 gap-3 mt-2">
+                        <div className="p-3 pt-0 grid grid-cols-2 gap-4 mt-2">
                              <div className="col-span-2">
-                                <label className="text-[10px] text-slate-500 mb-1 block">Aspect Ratio</label>
-                                <div className="grid grid-cols-5 gap-1">
+                                <label className="text-[10px] text-slate-500 mb-2 block uppercase tracking-wider">Aspect Ratio</label>
+                                <div className="grid grid-cols-5 gap-2">
                                     {['1:1', '16:9', '9:16', '3:4', '4:3'].map((ratio) => (
-                                        <button key={ratio} onClick={() => setAspectRatio(ratio)} className={`py-1.5 rounded text-[10px] border ${aspectRatio === ratio ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
+                                        <button key={ratio} onClick={() => setAspectRatio(ratio)} className={`py-2 rounded-md text-[10px] font-medium border transition-all ${aspectRatio === ratio ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-900/50' : 'bg-slate-800/50 border-white/5 text-slate-400 hover:bg-slate-700'}`}>
                                         {ratio}
                                         </button>
                                     ))}
                                 </div>
                              </div>
-                             <div className="flex flex-col gap-1">
-                                <label className="text-[10px] text-slate-500">Style</label>
-                                <select value={artStyle} onChange={e => setArtStyle(e.target.value)} className="bg-slate-800 text-xs text-slate-300 rounded p-1.5 border-none outline-none">
-                                    <option>None</option><option>Photorealistic</option><option>Anime</option><option>Cyberpunk</option><option>Oil Painting</option>
-                                </select>
+                             <div className="flex flex-col gap-2">
+                                <label className="text-[10px] text-slate-500 uppercase tracking-wider">Art Style</label>
+                                <div className="relative">
+                                    <select value={artStyle} onChange={e => setArtStyle(e.target.value)} className="w-full bg-black/40 text-xs text-slate-300 rounded-lg p-2.5 border border-white/10 outline-none focus:border-indigo-500 appearance-none">
+                                        <option>None</option><option>Photorealistic</option><option>Anime</option><option>Cyberpunk</option><option>Oil Painting</option><option>3D Render</option>
+                                    </select>
+                                    <ChevronDown size={12} className="absolute right-3 top-3 text-slate-500 pointer-events-none"/>
+                                </div>
                              </div>
-                             <div className="flex flex-col gap-1">
-                                <label className="text-[10px] text-slate-500">Light</label>
-                                <select value={lighting} onChange={e => setLighting(e.target.value)} className="bg-slate-800 text-xs text-slate-300 rounded p-1.5 border-none outline-none">
-                                    <option>Auto</option><option>Cinematic</option><option>Natural</option><option>Neon</option>
-                                </select>
+                             <div className="flex flex-col gap-2">
+                                <label className="text-[10px] text-slate-500 uppercase tracking-wider">Lighting</label>
+                                <div className="relative">
+                                    <select value={lighting} onChange={e => setLighting(e.target.value)} className="w-full bg-black/40 text-xs text-slate-300 rounded-lg p-2.5 border border-white/10 outline-none focus:border-indigo-500 appearance-none">
+                                        <option>Auto</option><option>Cinematic</option><option>Natural</option><option>Neon</option><option>Studio</option>
+                                    </select>
+                                    <ChevronDown size={12} className="absolute right-3 top-3 text-slate-500 pointer-events-none"/>
+                                </div>
                              </div>
                         </div>
                     )}
                 </div>
             </div>
 
-            <div className="p-4 border-t border-slate-800">
+            <div className="p-5 border-t border-white/5 bg-slate-900/50">
                 {cooldown > 0 ? (
-                    <Button disabled variant="secondary" className="w-full py-3 opacity-75">
+                    <Button disabled variant="secondary" className="w-full py-3.5 opacity-75">
                         <Clock className="animate-spin" size={16} /> Cooling down ({cooldown}s)
                     </Button>
                 ) : (
-                    <Button onClick={handleGenerate} disabled={loading || !prompt} variant="primary" className="w-full py-3" icon={Wand2}>
+                    <Button onClick={handleGenerate} disabled={loading || !prompt} variant="primary" className="w-full py-3.5 text-base shadow-indigo-500/20" icon={Wand2}>
                         {loading ? 'Generating...' : 'Generate Image'}
                     </Button>
                 )}
@@ -767,16 +760,16 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
         </div>
 
         {/* Right Panel: Result Preview */}
-        <div className="bg-slate-950 rounded-2xl border border-slate-800 relative overflow-hidden flex items-center justify-center group h-full">
+        <div className="glass-panel rounded-2xl relative overflow-hidden flex items-center justify-center group h-full shadow-2xl bg-[#080808]">
           {loading && <LoadingOverlay message="Weaving pixels..." onStop={handleStop} />}
           
           {errorMsg && !loading && (
-             <div className="absolute inset-0 z-40 flex items-center justify-center p-6 bg-slate-900/95 backdrop-blur-sm">
-                 <div className="bg-slate-900 border border-red-500/30 rounded-xl p-8 max-w-sm text-center flex flex-col items-center shadow-2xl">
-                     <AlertTriangle className="text-red-400 w-8 h-8 mb-4" />
-                     <h3 className="text-white font-bold mb-2">Failed</h3>
-                     <p className="text-red-200/80 text-xs mb-4">{errorMsg}</p>
-                     <Button variant="outline" onClick={() => setErrorMsg(null)} size="sm">Dismiss</Button>
+             <div className="absolute inset-0 z-40 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm">
+                 <div className="glass-panel border border-red-500/30 rounded-xl p-8 max-w-sm text-center flex flex-col items-center shadow-2xl bg-slate-900/90">
+                     <AlertTriangle className="text-red-400 w-10 h-10 mb-4" />
+                     <h3 className="text-white font-bold mb-2 text-lg">Generation Failed</h3>
+                     <p className="text-red-200/70 text-sm mb-6 leading-relaxed">{errorMsg}</p>
+                     <Button variant="outline" onClick={() => setErrorMsg(null)} size="sm" className="w-full border-red-500/30 hover:bg-red-500/10 text-red-300">Dismiss</Button>
                  </div>
              </div>
           )}
@@ -784,24 +777,25 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
           {generatedImage ? (
             <div className="relative w-full h-full flex flex-col bg-[url('https://grainy-gradients.vercel.app/noise.svg')]">
               <div className="absolute top-4 right-4 z-20 flex gap-2">
-                  <IconButton onClick={() => generatedImage && shareImage(generatedImage, 'Generated', prompt)} icon={Share2} />
-                  <a href={generatedImage} download={`gemini-gen-${Date.now()}.png`} className="p-2.5 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-200 flex items-center justify-center"><Download size={20} /></a>
-                  <IconButton onClick={() => setGeneratedImage(null)} icon={X} variant="danger" />
+                  <IconButton onClick={() => generatedImage && shareImage(generatedImage, 'Generated', prompt)} icon={Share2} className="bg-black/50 backdrop-blur" />
+                  <a href={generatedImage} download={`gemini-gen-${Date.now()}.png`} className="p-2 rounded-lg bg-black/50 backdrop-blur hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-white/10"><Download size={18} /></a>
+                  <IconButton onClick={() => setGeneratedImage(null)} icon={X} variant="danger" className="backdrop-blur" />
               </div>
               
-              {/* Simple Image Fit - Click to Lightbox */}
-              <div className="flex-1 p-4 flex items-center justify-center cursor-zoom-in" onClick={() => setShowZoom(true)}>
-                  <img src={generatedImage} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
+              <div className="flex-1 p-6 flex items-center justify-center cursor-zoom-in" onClick={() => setShowZoom(true)}>
+                  <img src={generatedImage} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl drop-shadow-2xl" />
               </div>
               
-              <div className="p-4 bg-slate-900/50 backdrop-blur-md text-center border-t border-slate-800">
-                   <p className="text-xs text-slate-400 font-mono mb-2">Click image to fullscreen</p>
+              <div className="p-3 bg-black/60 backdrop-blur-md text-center border-t border-white/5">
+                   <p className="text-[10px] text-slate-400 font-mono tracking-widest uppercase">Click image to fullscreen</p>
               </div>
             </div>
           ) : !errorMsg && (
             <div className="text-center text-slate-600 p-8 flex flex-col items-center">
-              <Sparkles className="w-16 h-16 mb-4 opacity-10" />
-              <p className="text-sm font-medium">Result will appear here</p>
+              <div className="w-20 h-20 rounded-full bg-slate-900/50 flex items-center justify-center mb-4 border border-white/5">
+                <Sparkles className="w-8 h-8 opacity-20 text-indigo-500" />
+              </div>
+              <p className="text-sm font-medium text-slate-500">Result will appear here</p>
             </div>
           )}
         </div>
@@ -888,7 +882,7 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full animate-fade-in">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full animate-fade-in">
       {showZoom && resultImage && (
          <Lightbox 
             src={resultImage} 
@@ -900,34 +894,37 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
       )}
 
       {/* Control Panel */}
-      <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 flex flex-col gap-4 overflow-hidden h-full">
-        <div className="flex-1 flex flex-col gap-4 overflow-y-auto scrollbar-hide">
-             <div className="border border-dashed border-slate-700 rounded-xl p-4 flex flex-col items-center justify-center text-center hover:border-pink-500/50 hover:bg-slate-800/50 transition-all cursor-pointer relative min-h-[180px] bg-slate-900">
-                <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
+      <div className="glass-panel p-5 rounded-2xl flex flex-col gap-4 overflow-hidden h-full shadow-2xl">
+        <div className="flex-1 flex flex-col gap-5 overflow-y-auto scrollbar-hide">
+             <div className="border border-dashed border-slate-700 rounded-xl p-4 flex flex-col items-center justify-center text-center hover:border-pink-500/50 hover:bg-white/5 transition-all cursor-pointer relative min-h-[200px] bg-black/20 group">
+                <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
                 {imagePreview ? (
                 <div className="relative w-full h-full flex items-center justify-center">
-                    <img src={imagePreview} className="max-h-40 rounded-lg object-contain" />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity rounded-lg">
-                        <p className="text-white text-xs font-medium">Click to Change</p>
+                    <img src={imagePreview} className="max-h-48 rounded-lg object-contain shadow-lg" />
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-lg">
+                        <p className="text-white text-xs font-bold uppercase tracking-widest">Click to Change</p>
                     </div>
                 </div>
                 ) : (
                 <div className="flex flex-col items-center">
-                    <Upload className="text-slate-400 mb-2" size={24}/>
-                    <span className="text-slate-400 text-xs font-medium">Upload Source</span>
+                    <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mb-3">
+                        <Upload className="text-slate-400" size={20}/>
+                    </div>
+                    <span className="text-slate-400 text-sm font-medium">Upload Source Image</span>
+                    <span className="text-slate-600 text-xs mt-1">JPG, PNG supported</span>
                 </div>
                 )}
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-3">
                  {[
                     { l: "Remove BG", p: "Remove background, white background", i: Scissors },
                     { l: "Upscale", p: "High quality, sharpen details, 4k", i: MonitorPlay },
                     { l: "Cyberpunk", p: "Cyberpunk neon style, futuristic", i: Zap },
                     { l: "Sketch", p: "Pencil sketch on paper", i: Wand2 }
                  ].map((t, idx) => (
-                    <button key={idx} onClick={() => setPrompt(t.p)} className="flex items-center gap-2 p-3 bg-slate-800 border border-slate-700 rounded-lg hover:border-pink-500/50 transition-all text-xs text-slate-300">
-                        <t.i size={14} className="text-pink-500" /> {t.l}
+                    <button key={idx} onClick={() => setPrompt(t.p)} className="flex items-center gap-2 p-3 bg-slate-800/50 border border-white/5 rounded-xl hover:border-pink-500/50 hover:bg-slate-800 transition-all text-xs text-slate-300 group">
+                        <t.i size={14} className="text-pink-500 group-hover:scale-110 transition-transform" /> {t.l}
                     </button>
                  ))}
             </div>
@@ -936,42 +933,42 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
                 label="Instruction"
                 value={prompt}
                 onChange={(e: any) => setPrompt(e.target.value)}
-                placeholder="Make it look like..."
-                className="w-full h-32 bg-slate-800 border-slate-700 rounded-xl p-3 text-slate-200 focus:ring-2 focus:ring-pink-500 text-sm"
+                placeholder="What should AI change?"
+                className="w-full h-32 bg-black/40 border-white/10 rounded-xl p-4 text-slate-200 focus:ring-1 focus:ring-pink-500 text-sm"
             />
         </div>
 
         {cooldown > 0 ? (
-            <Button disabled variant="secondary" className="w-full py-3 opacity-75">
+            <Button disabled variant="secondary" className="w-full py-3.5 opacity-75">
                 <Clock className="animate-spin" size={16} /> Cooling Down ({cooldown}s)
             </Button>
         ) : (
-            <Button onClick={handleEdit} disabled={loading || !image || !prompt} className="w-full py-3 bg-pink-600 hover:bg-pink-500" icon={Sparkles}>
+            <Button onClick={handleEdit} disabled={loading || !image || !prompt} className="w-full py-3.5 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 border-pink-500/50 shadow-pink-900/20" icon={Sparkles}>
                 {loading ? 'Processing...' : 'Apply Magic'}
             </Button>
         )}
       </div>
 
       {/* Result Panel */}
-      <div className="bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-center relative overflow-hidden h-full">
+      <div className="glass-panel rounded-2xl flex items-center justify-center relative overflow-hidden h-full shadow-2xl bg-[#080808]">
         {loading && <LoadingOverlay message="Transforming..." />}
         {errorMsg && !loading && (
-             <div className="absolute inset-0 z-40 flex items-center justify-center p-6 bg-slate-900/90">
-                 <div className="bg-red-900/20 border border-red-500/30 rounded-xl p-6 text-center">
+             <div className="absolute inset-0 z-40 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm">
+                 <div className="glass-panel border border-red-500/30 rounded-xl p-6 text-center max-w-sm">
                      <p className="text-red-300 text-sm">{errorMsg}</p>
-                     <button onClick={() => setErrorMsg(null)} className="mt-4 text-xs bg-red-500/20 px-4 py-2 rounded">Dismiss</button>
+                     <button onClick={() => setErrorMsg(null)} className="mt-4 text-xs bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-lg text-red-200 hover:bg-red-500/20">Dismiss</button>
                  </div>
              </div>
         )}
 
         {resultImage ? (
-          <div className="w-full h-full flex items-center justify-center cursor-zoom-in p-4" onClick={() => setShowZoom(true)}>
-             <img src={resultImage} className="max-w-full max-h-full object-contain rounded shadow-2xl" />
+          <div className="w-full h-full flex items-center justify-center cursor-zoom-in p-6" onClick={() => setShowZoom(true)}>
+             <img src={resultImage} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
           </div>
         ) : (
           <div className="text-center text-slate-600">
-            <Wand2 className="w-16 h-16 mx-auto mb-4 opacity-20" />
-            <p className="text-sm">Magic awaits...</p>
+            <Wand2 className="w-12 h-12 mx-auto mb-4 opacity-20" />
+            <p className="text-sm font-medium">Magic awaits...</p>
           </div>
         )}
       </div>
@@ -1012,26 +1009,39 @@ const AnalyzeView = ({ onGenerateFromAnalysis, apiKey }: { onGenerateFromAnalysi
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full animate-fade-in">
-       <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 flex flex-col gap-4 h-full">
-            <div className="border border-dashed border-slate-700 rounded-xl p-4 flex-1 flex flex-col items-center justify-center relative bg-slate-800/20">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full animate-fade-in">
+       <div className="glass-panel p-5 rounded-2xl flex flex-col gap-4 h-full shadow-2xl">
+            <div className="border border-dashed border-slate-700 rounded-xl p-4 flex-1 flex flex-col items-center justify-center relative bg-black/20 hover:bg-white/5 transition-colors">
               <input type="file" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
               {filePreview ? (
                 <div className="flex flex-col items-center justify-center w-full h-full">
-                  {filePreview.type === 'image' && <img src={filePreview.url} className="max-h-48 rounded" />}
-                  {filePreview.type === 'video' && <video src={filePreview.url} controls className="max-h-48 rounded" />}
-                  <Button variant="ghost" size="sm" onClick={(e:any) => {e.stopPropagation(); setFile(null); setFilePreview(null);}} className="mt-2 text-red-400">Remove</Button>
+                  {filePreview.type === 'image' && <img src={filePreview.url} className="max-h-64 rounded shadow-lg" />}
+                  {filePreview.type === 'video' && <video src={filePreview.url} controls className="max-h-64 rounded shadow-lg" />}
+                  <Button variant="ghost" size="sm" onClick={(e:any) => {e.stopPropagation(); setFile(null); setFilePreview(null);}} className="mt-4 text-red-400 hover:bg-red-500/10">Remove Media</Button>
                 </div>
               ) : (
-                <div className="text-center"><ScanEye className="mx-auto mb-2 text-emerald-500" /><span className="text-slate-400 text-sm">Drop Media</span></div>
+                <div className="text-center">
+                    <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-3 text-emerald-500"><ScanEye /></div>
+                    <span className="text-slate-400 text-sm font-medium">Drop Image or Video</span>
+                </div>
               )}
             </div>
-            <PromptArea value={prompt} onChange={(e: any) => setPrompt(e.target.value)} placeholder="Question..." className="w-full h-24 bg-slate-800 border-slate-700 rounded-xl p-3 text-slate-200 text-sm" />
-            <Button onClick={handleAnalyze} disabled={loading || !file} className="w-full bg-emerald-600 hover:bg-emerald-500" icon={ScanEye}>{loading ? 'Analyzing...' : 'Analyze'}</Button>
+            <PromptArea value={prompt} onChange={(e: any) => setPrompt(e.target.value)} placeholder="Ask something about this image..." className="w-full h-32 bg-black/40 border-white/10 rounded-xl p-4 text-slate-200 text-sm" />
+            <Button onClick={handleAnalyze} disabled={loading || !file} className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 py-3.5" icon={ScanEye}>{loading ? 'Analyzing...' : 'Analyze Content'}</Button>
        </div>
-       <div className="bg-slate-950 rounded-2xl border border-slate-800 p-6 overflow-y-auto text-slate-300 whitespace-pre-wrap h-full font-light">
-            {analysis || <span className="text-slate-600 italic">Analysis results...</span>}
-            {analysis && <Button onClick={() => onGenerateFromAnalysis(analysis)} variant="primary" className="mt-4 w-full" icon={Wand2}>Use as Prompt</Button>}
+       <div className="glass-panel rounded-2xl p-6 overflow-y-auto text-slate-300 whitespace-pre-wrap h-full font-light shadow-2xl leading-relaxed text-sm bg-black/40">
+            {analysis ? (
+                <div>
+                     <h3 className="text-white font-bold mb-4 flex items-center gap-2"><Sparkles size={16} className="text-emerald-500"/> Analysis Result</h3>
+                     {analysis}
+                     <Button onClick={() => onGenerateFromAnalysis(analysis)} variant="primary" className="mt-6 w-full bg-indigo-600" icon={Wand2}>Use as Prompt Generator</Button>
+                </div>
+            ) : (
+                <div className="h-full flex flex-col items-center justify-center text-slate-600">
+                    <ScanEye size={48} className="opacity-20 mb-4" />
+                    <p>Analysis results will appear here</p>
+                </div>
+            )}
        </div>
     </div>
   );
@@ -1064,25 +1074,35 @@ const ChatView = ({ apiKey }: { apiKey: string }) => {
         const text = (chunk as GenerateContentResponse).text;
         if (text) { fullResponse += text; setMessages(p => p.map(m => m.id === botMsgId ? { ...m, text: fullResponse } : m)); }
       }
-    } catch (error) { setMessages(p => [...p, { id: generateId(), role: 'model', text: "Error.", timestamp: Date.now() }]); } finally { setIsTyping(false); }
+    } catch (error) { setMessages(p => [...p, { id: generateId(), role: 'model', text: "Error connecting to AI.", timestamp: Date.now() }]); } finally { setIsTyping(false); }
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-900/50 rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
-      <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-hide">
+    <div className="flex flex-col h-full glass-panel rounded-2xl overflow-hidden shadow-2xl">
+      <div className="p-4 border-b border-white/5 bg-slate-900/50 flex items-center justify-between">
+          <h3 className="text-white font-bold flex items-center gap-2"><MessageSquare size={18} className="text-blue-500" /> AI Assistant</h3>
+          <button onClick={() => setMessages([])} className="text-xs text-slate-500 hover:text-red-400">Clear Chat</button>
+      </div>
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide bg-black/20">
+        {messages.length === 0 && (
+            <div className="h-full flex flex-col items-center justify-center text-slate-600 opacity-50">
+                <MessageSquare size={48} className="mb-4" />
+                <p>Start a conversation...</p>
+            </div>
+        )}
         {messages.map((msg) => (
           <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[80%] rounded-2xl p-3 ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-200 border border-slate-700'}`}>
-               <p className="whitespace-pre-wrap text-sm">{msg.text}</p>
+            <div className={`max-w-[80%] rounded-2xl p-4 shadow-md ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-slate-800 text-slate-200 border border-white/5 rounded-bl-none'}`}>
+               <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.text}</p>
             </div>
           </div>
         ))}
-        {isTyping && <div className="text-slate-500 text-xs animate-pulse">Assistant is typing...</div>}
+        {isTyping && <div className="text-slate-500 text-xs animate-pulse pl-4">Assistant is thinking...</div>}
         <div ref={messagesEndRef} />
       </div>
-      <div className="p-4 bg-slate-900/80 backdrop-blur-md border-t border-slate-800 flex gap-2">
-          <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()} placeholder="Message..." className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 text-slate-200 outline-none h-10 text-sm" />
-          <button onClick={handleSend} disabled={!input.trim()} className="p-2 bg-blue-600 rounded-xl text-white hover:bg-blue-500"><Send size={18} /></button>
+      <div className="p-4 bg-slate-900/80 backdrop-blur-md border-t border-white/5 flex gap-3">
+          <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()} placeholder="Type a message..." className="flex-1 bg-black/50 border border-white/10 rounded-xl px-5 text-slate-200 outline-none h-12 text-sm focus:border-blue-500 transition-colors" />
+          <button onClick={handleSend} disabled={!input.trim()} className="h-12 w-12 flex items-center justify-center bg-blue-600 rounded-xl text-white hover:bg-blue-500 shadow-lg shadow-blue-900/20"><Send size={20} /></button>
       </div>
     </div>
   );
@@ -1093,13 +1113,22 @@ const GalleryView = ({ items, onDelete }: { items: GalleryItem[], onDelete: (id:
   return (
     <div className="h-full animate-fade-in flex flex-col">
        {selectedItem && <Lightbox src={selectedItem.src} prompt={selectedItem.prompt} onClose={() => setSelectedItem(null)} onDelete={() => { onDelete(selectedItem.id); setSelectedItem(null); }} showDelete={true} />}
-       <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 overflow-y-auto pb-4 pr-2 scrollbar-hide">
+       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 overflow-y-auto pb-4 pr-2 scrollbar-hide">
             {items.slice().reverse().map((item) => (
-              <div key={item.id} className="aspect-square bg-slate-900 rounded-xl overflow-hidden cursor-pointer border border-slate-800 hover:border-indigo-500 transition-all" onClick={() => setSelectedItem(item)}>
-                <img src={item.src} className="w-full h-full object-cover" loading="lazy" />
+              <div key={item.id} className="aspect-square bg-slate-800 rounded-xl overflow-hidden cursor-pointer border border-white/5 hover:border-indigo-500 transition-all group relative" onClick={() => setSelectedItem(item)}>
+                <img src={item.src} className="w-full h-full object-cover transition-transform group-hover:scale-105" loading="lazy" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
+                    <p className="text-white text-[10px] line-clamp-1">{item.prompt}</p>
+                </div>
               </div>
             ))}
        </div>
+       {items.length === 0 && (
+           <div className="flex-1 flex flex-col items-center justify-center text-slate-600">
+               <Images size={64} className="opacity-20 mb-4" />
+               <p>Gallery is empty</p>
+           </div>
+       )}
     </div>
   );
 };
@@ -1125,34 +1154,44 @@ const App = () => {
   const TopTab = ({ id, icon: Icon, label }: any) => (
     <button
       onClick={() => setActiveTab(id)}
-      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 text-sm font-medium ${
+      className={`relative flex items-center gap-2 px-5 py-2.5 rounded-full transition-all duration-300 text-sm font-medium border ${
         activeTab === id 
-          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' 
-          : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+          ? 'bg-white/10 text-white border-white/10 shadow-[0_0_20px_rgba(99,102,241,0.3)]' 
+          : 'text-slate-400 border-transparent hover:text-white hover:bg-white/5'
       }`}
     >
-      <Icon size={16} />
+      <Icon size={16} className={activeTab === id ? 'text-indigo-400' : ''} />
       <span>{label}</span>
+      {activeTab === id && <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/3 h-0.5 bg-indigo-500 blur-[2px]"></span>}
     </button>
   );
 
   return (
-    <div className="h-screen bg-slate-950 flex flex-col overflow-hidden font-sans text-slate-200">
+    <div className="h-screen flex flex-col overflow-hidden font-sans text-slate-200 bg-black selection:bg-indigo-500/30 selection:text-white">
       
+      {/* Background Ambience */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-900/20 blur-[100px] rounded-full"></div>
+          <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-900/20 blur-[100px] rounded-full"></div>
+      </div>
+
       <ApiKeyModal isOpen={showSettingsModal} onSave={saveApiKey} initialKey={userApiKey} onClose={() => setShowSettingsModal(false)} />
 
       {/* TOP NAVIGATION BAR */}
-      <header className="h-16 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800 flex items-center justify-between px-6 z-50 shrink-0">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-gradient-to-tr from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                    <Sparkles size={18} className="text-white" />
+      <header className="h-20 bg-black/20 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-6 z-50 shrink-0">
+          <div className="flex items-center gap-8">
+            <div className="flex items-center gap-3 group">
+                <div className="w-10 h-10 bg-gradient-to-tr from-indigo-600 to-violet-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:rotate-6 transition-transform border border-white/10">
+                    <Sparkles size={20} className="text-white" />
                 </div>
-                <h1 className="text-lg font-bold text-white tracking-tight hidden md:block">Ares Suite</h1>
+                <div>
+                    <h1 className="text-lg font-bold text-white tracking-tight leading-none">ARES</h1>
+                    <span className="text-[10px] text-slate-500 tracking-widest uppercase font-mono">Creative Suite</span>
+                </div>
             </div>
             
             {/* Desktop Tabs */}
-            <div className="hidden md:flex items-center bg-slate-900/50 p-1 rounded-xl border border-slate-800/50">
+            <div className="hidden md:flex items-center gap-1 bg-black/40 p-1.5 rounded-full border border-white/5 backdrop-blur-xl">
                 <TopTab id="generate" icon={Sparkles} label="Generate" />
                 <TopTab id="edit" icon={Wand2} label="Edit" />
                 <TopTab id="analyze" icon={ScanEye} label="Analyze" />
@@ -1161,18 +1200,23 @@ const App = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-              <button onClick={() => setShowSettingsModal(true)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors" title="Settings">
-                  <Settings size={18} />
+          <div className="flex items-center gap-3">
+              <div className="hidden lg:flex flex-col items-end mr-2">
+                  <span className="text-[10px] text-slate-500 font-mono">GEMINI 2.5 FLASH</span>
+                  <span className="text-[10px] text-green-500 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span> ONLINE</span>
+              </div>
+              <div className="h-8 w-[1px] bg-white/10 mx-2 hidden lg:block"></div>
+              <button onClick={() => setShowSettingsModal(true)} className="p-2.5 text-slate-400 hover:text-white hover:bg-white/5 rounded-full transition-colors border border-transparent hover:border-white/10" title="Settings">
+                  <Settings size={20} />
               </button>
-              <button onClick={handleLogout} className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors" title="Logout">
-                  <LogOut size={18} />
+              <button onClick={handleLogout} className="p-2.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-full transition-colors border border-transparent hover:border-red-500/20" title="Logout">
+                  <LogOut size={20} />
               </button>
           </div>
       </header>
 
       {/* Mobile Tabs (Horizontal Scroll) */}
-      <div className="md:hidden flex overflow-x-auto p-2 gap-2 bg-slate-950 border-b border-slate-800 shrink-0 scrollbar-hide">
+      <div className="md:hidden flex overflow-x-auto p-3 gap-2 bg-black border-b border-white/5 shrink-0 scrollbar-hide z-40">
          <TopTab id="generate" icon={Sparkles} label="Gen" />
          <TopTab id="edit" icon={Wand2} label="Edit" />
          <TopTab id="analyze" icon={ScanEye} label="Scan" />
@@ -1181,8 +1225,8 @@ const App = () => {
       </div>
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 overflow-hidden p-4 md:p-6 relative bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-slate-950">
-        <div className="max-w-[1800px] mx-auto h-full">
+      <main className="flex-1 overflow-hidden p-4 md:p-6 relative z-10">
+        <div className="max-w-[1600px] mx-auto h-full">
             {/* Keep components mounted to preserve state */}
             <div className={`h-full ${activeTab === 'generate' ? 'block' : 'hidden'}`}>
                 <GenerateView onAddToGallery={addToGallery} externalPrompt={sharedPrompt} onPromptUsed={() => setSharedPrompt('')} apiKey={userApiKey} />
