@@ -45,7 +45,8 @@ import {
   EyeOff,
   Github,
   Code2,
-  AlertTriangle
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react';
 
 // --- Types & Interfaces ---
@@ -69,21 +70,68 @@ interface ChatMessage {
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-const fileToGenerativePart = async (file: File) => {
-  return new Promise<{ inlineData: { data: string; mimeType: string } }>((resolve, reject) => {
+// NEW: Image Compression Helper to reduce Token Usage and prevent 429 Errors
+const compressImage = async (file: File, maxWidth = 800, quality = 0.8): Promise<string> => {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64String = (reader.result as string).split(',')[1];
-      resolve({
-        inlineData: {
-          data: base64String,
-          mimeType: file.type,
-        },
-      });
-    };
-    reader.onerror = reject;
     reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        // Resize logic
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        // Get base64 string (without prefix for API)
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        const base64 = dataUrl.split(',')[1];
+        resolve(base64);
+      };
+      img.onerror = (error) => reject(error);
+    };
+    reader.onerror = (error) => reject(error);
   });
+};
+
+const fileToGenerativePart = async (file: File, isImageForGeneration = false) => {
+  if (isImageForGeneration && file.type.startsWith('image/')) {
+    // Use compression for generation tasks to save tokens
+    const base64String = await compressImage(file);
+    return {
+      inlineData: {
+        data: base64String,
+        mimeType: 'image/jpeg', // Always JPEG after compression
+      },
+    };
+  } else {
+    // Standard raw read for analysis or small files
+    return new Promise<{ inlineData: { data: string; mimeType: string } }>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = (reader.result as string).split(',')[1];
+        resolve({
+          inlineData: {
+            data: base64String,
+            mimeType: file.type,
+          },
+        });
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
 };
 
 const dataURLtoFile = (dataurl: string, filename: string) => {
@@ -130,7 +178,8 @@ const getAI = (apiKey: string) => {
   return new GoogleGenAI({ apiKey: apiKey.trim() });
 };
 
-const safetySettings = [
+// Standard permissive settings
+const permissiveSafetySettings = [
   { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
   { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
   { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
@@ -583,7 +632,8 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
       const ai = getAI(apiKey);
       const parts: any[] = [];
       for (const file of refImages) {
-        const imagePart = await fileToGenerativePart(file);
+        // Use isImageForGeneration = true to trigger compression
+        const imagePart = await fileToGenerativePart(file, true);
         parts.push(imagePart);
       }
 
@@ -595,8 +645,13 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
       if (camera !== 'Auto') constructedPrompt += `, ${camera} view`;
       if (quality === 'High (2k)') constructedPrompt += `, highly detailed, 4k resolution, sharp focus, masterpiece`;
 
-      if (refImages.length > 0 && lockFace) {
-        constructedPrompt = "Strictly maintain 100% facial identity, structure, and features consistent with the provided reference image(s). " + constructedPrompt;
+      if (refImages.length > 0) {
+        if (lockFace) {
+          constructedPrompt = "Strictly maintain 100% facial identity, structure, and features consistent with the provided reference image(s). " + constructedPrompt;
+        } else {
+          // Explicit instruction for reference usage to avoid model confusion/safety trigger
+          constructedPrompt = "Use the provided image(s) as a visual reference for composition and style. " + constructedPrompt;
+        }
       }
       
       parts.push({ text: constructedPrompt });
@@ -609,7 +664,8 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
             aspectRatio: aspectRatio as any,
             numberOfImages: 1
           },
-          safetySettings: safetySettings // Explicitly setting permissive safety settings
+          // Try with permissive settings first
+          safetySettings: permissiveSafetySettings
         }
       });
 
@@ -623,7 +679,9 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
       // Check for finish reason if available
       if (candidates[0].finishReason && candidates[0].finishReason !== 'STOP') {
          if (candidates[0].finishReason === 'SAFETY') {
-             throw new Error("Generation blocked by safety filters. Try a less sensitive prompt or different keywords.");
+             // Extract detailed safety info if possible
+             const ratings = candidates[0].safetyRatings?.map(r => `${r.category}: ${r.probability}`).join(', ');
+             throw new Error(`Generation blocked by safety filters. (${ratings || 'Unknown Category'})`);
          }
          if (candidates[0].finishReason === 'OTHER') {
              throw new Error("Generation failed (FinishReason: OTHER). This model may be temporarily unavailable or the prompt is too complex.");
@@ -656,10 +714,14 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
         console.error("Generation Error:", error);
         // Extract useful error info
         let msg = error.message || "Failed to generate image.";
-        if (msg.includes('400')) msg = "400 Bad Request: Check API Key permissions or Prompt content.";
-        if (msg.includes('403')) msg = "403 Forbidden: Your API Key might not support Image Generation.";
-        if (msg.includes('429')) msg = "429 Quota Exceeded: You are generating too fast.";
-        
+        // Normalize message case for checks
+        const lowerMsg = msg.toLowerCase();
+
+        if (lowerMsg.includes('400')) msg = "400 Bad Request: Prompt rejected. Try removing 'Safe' words or using a cleaner prompt. (Some keys cannot use BLOCK_NONE)";
+        else if (lowerMsg.includes('403')) msg = "403 Forbidden: Your API Key might not support Image Generation.";
+        else if (lowerMsg.includes('429') || lowerMsg.includes('quota')) msg = "429 Quota Exceeded: Server busy or too many requests. Try removing reference images or waiting a moment.";
+        else if (lowerMsg.includes('safety')) msg = `Prompt Rejected: ${msg.replace('Error: ', '')}`;
+
         setErrorMsg(msg);
       }
     } finally {
@@ -709,7 +771,7 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
 
              {refImages.length > 0 && (
                 <button onClick={() => setLockFace(!lockFace)} className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${lockFace ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
-                  {lockFace ? <Lock size={14} /> : <Unlock size={14} />} {lockFace ? 'Lock Face 100%' : 'Lock Face Identity'}
+                  {lockFace ? <Lock size={14} /> : <Unlock size={14} />} {lockFace ? 'Lock Face 100%' : 'Reference Style'}
                 </button>
              )}
           </div>
@@ -818,7 +880,9 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
                      <AlertTriangle className="text-red-400 w-10 h-10 mb-3" />
                      <h3 className="text-red-200 font-bold mb-2">Generation Failed</h3>
                      <p className="text-red-300/80 text-sm mb-4">{errorMsg}</p>
-                     <Button variant="outline" size="sm" onClick={() => setErrorMsg(null)}>Dismiss</Button>
+                     <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setErrorMsg(null)}>Dismiss</Button>
+                     </div>
                  </div>
              </div>
           )}
@@ -911,7 +975,9 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
 
     try {
       const ai = getAI(apiKey);
-      const imagePart = await fileToGenerativePart(image);
+      // Use isImageForGeneration = true to trigger compression
+      const imagePart = await fileToGenerativePart(image, true);
+      
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: {
@@ -921,7 +987,7 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
           ]
         },
         config: {
-           safetySettings: safetySettings // Essential for image modifications
+           safetySettings: permissiveSafetySettings // Essential for image modifications
         }
       });
       
@@ -931,7 +997,8 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
       }
 
       if (candidates[0].finishReason === 'SAFETY') {
-         throw new Error("Edit blocked by safety filters.");
+         const ratings = candidates[0].safetyRatings?.map(r => `${r.category}: ${r.probability}`).join(', ');
+         throw new Error(`Edit blocked by safety filters. (${ratings})`);
       }
 
       let found = false;
@@ -955,8 +1022,12 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
     } catch (error: any) {
       console.error(error);
        let msg = error.message || "Failed to edit image.";
-       if (msg.includes('400')) msg = "400 Bad Request: Check API Key or Prompt.";
-       if (msg.includes('403')) msg = "403 Forbidden: API Key invalid for this model.";
+       const lowerMsg = msg.toLowerCase();
+       if (lowerMsg.includes('400')) msg = "400 Bad Request: Check API Key or Prompt.";
+       else if (lowerMsg.includes('403')) msg = "403 Forbidden: API Key invalid for this model.";
+       else if (lowerMsg.includes('429') || lowerMsg.includes('quota')) msg = "429 Quota Exceeded: The image is too large for the free quota. Compression has been applied, please try again.";
+       else if (lowerMsg.includes('safety')) msg = `Safety Block: ${msg.replace('Error: ', '')}`;
+       
        setErrorMsg(msg);
     } finally {
       setLoading(false);
