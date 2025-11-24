@@ -44,7 +44,8 @@ import {
   Eye,
   EyeOff,
   Github,
-  Code2
+  Code2,
+  AlertTriangle
 } from 'lucide-react';
 
 // --- Types & Interfaces ---
@@ -518,6 +519,7 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [showZoom, setShowZoom] = useState(false);
   
@@ -574,6 +576,7 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
     
     setLoading(true);
     setGeneratedImage(null);
+    setErrorMsg(null);
     abortControllerRef.current = new AbortController();
 
     try {
@@ -603,9 +606,10 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
         contents: { parts },
         config: {
           imageConfig: {
-            aspectRatio: aspectRatio as any
+            aspectRatio: aspectRatio as any,
+            numberOfImages: 1
           },
-          // Removing safetySettings here as they can cause 400s on some image keys if set explicitly
+          safetySettings: safetySettings // Explicitly setting permissive safety settings
         }
       });
 
@@ -613,14 +617,16 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
 
       const candidates = response.candidates;
       if (!candidates || candidates.length === 0) {
-        throw new Error("No image generated. The prompt might have been blocked by safety filters.");
+        throw new Error("No candidates returned. The request may have been blocked.");
       }
       
       // Check for finish reason if available
       if (candidates[0].finishReason && candidates[0].finishReason !== 'STOP') {
-         // If finishReason is SAFETY, we can throw a specific error
          if (candidates[0].finishReason === 'SAFETY') {
-             throw new Error("Generation blocked by safety filters. Please try a different prompt.");
+             throw new Error("Generation blocked by safety filters. Try a less sensitive prompt or different keywords.");
+         }
+         if (candidates[0].finishReason === 'OTHER') {
+             throw new Error("Generation failed (FinishReason: OTHER). This model may be temporarily unavailable or the prompt is too complex.");
          }
       }
 
@@ -642,13 +648,19 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
       }
 
       if (!foundImage) {
-          throw new Error("Model response did not contain an image.");
+          throw new Error("Model response success, but no image data found in response.");
       }
 
     } catch (error: any) {
       if (loading) {
         console.error("Generation Error:", error);
-        alert(`Error: ${error.message || "Failed to generate image. Please check your API key."}`);
+        // Extract useful error info
+        let msg = error.message || "Failed to generate image.";
+        if (msg.includes('400')) msg = "400 Bad Request: Check API Key permissions or Prompt content.";
+        if (msg.includes('403')) msg = "403 Forbidden: Your API Key might not support Image Generation.";
+        if (msg.includes('429')) msg = "429 Quota Exceeded: You are generating too fast.";
+        
+        setErrorMsg(msg);
       }
     } finally {
       setLoading(false);
@@ -800,6 +812,17 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
         <div className="lg:col-span-8 bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-center relative overflow-hidden min-h-[400px] order-1 lg:order-2 group">
           {loading && <LoadingOverlay message="Weaving pixels together..." onStop={handleStop} />}
           
+          {errorMsg && !loading && (
+             <div className="absolute inset-0 z-40 flex items-center justify-center p-6 bg-slate-900/90">
+                 <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-6 max-w-md text-center flex flex-col items-center animate-fade-in">
+                     <AlertTriangle className="text-red-400 w-10 h-10 mb-3" />
+                     <h3 className="text-red-200 font-bold mb-2">Generation Failed</h3>
+                     <p className="text-red-300/80 text-sm mb-4">{errorMsg}</p>
+                     <Button variant="outline" size="sm" onClick={() => setErrorMsg(null)}>Dismiss</Button>
+                 </div>
+             </div>
+          )}
+
           {generatedImage ? (
             <div className="relative w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')]">
               <ZoomableImage src={generatedImage} />
@@ -825,7 +848,7 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
                   </div>
                </div>
             </div>
-          ) : (
+          ) : !errorMsg && (
             <div className="text-center text-slate-600 p-8 flex flex-col items-center select-none">
               <div className="w-24 h-24 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mb-6">
                 <Sparkles className="w-10 h-10 text-indigo-500/40" />
@@ -847,6 +870,7 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
   const [loading, setLoading] = useState(false);
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [showZoom, setShowZoom] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Grouped Presets
   const presetGroups = {
@@ -875,6 +899,7 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
       setImage(file);
       setImagePreview(URL.createObjectURL(file));
       setResultImage(null);
+      setErrorMsg(null);
     }
   };
 
@@ -882,6 +907,7 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
     if (!image || !prompt.trim()) return;
     setLoading(true);
     setResultImage(null);
+    setErrorMsg(null);
 
     try {
       const ai = getAI(apiKey);
@@ -894,9 +920,21 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
             { text: prompt }
           ]
         },
-        // Removing explicit safety settings to avoid 400 errors on some keys
+        config: {
+           safetySettings: safetySettings // Essential for image modifications
+        }
       });
+      
+      const candidates = response.candidates;
+      if (!candidates || candidates.length === 0) {
+        throw new Error("No candidates returned.");
+      }
 
+      if (candidates[0].finishReason === 'SAFETY') {
+         throw new Error("Edit blocked by safety filters.");
+      }
+
+      let found = false;
       for (const part of response.candidates?.[0]?.content?.parts || []) {
         if (part.inlineData) {
           const imageUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
@@ -908,12 +946,18 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
             prompt: prompt,
             timestamp: Date.now()
           });
+          found = true;
           break;
         }
       }
+      if (!found) throw new Error("No image data in response.");
+
     } catch (error: any) {
       console.error(error);
-      alert(`Error: ${error.message || 'Failed to edit image. Check API key.'}`);
+       let msg = error.message || "Failed to edit image.";
+       if (msg.includes('400')) msg = "400 Bad Request: Check API Key or Prompt.";
+       if (msg.includes('403')) msg = "403 Forbidden: API Key invalid for this model.";
+       setErrorMsg(msg);
     } finally {
       setLoading(false);
     }
@@ -989,6 +1033,17 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
       <div className="lg:col-span-8 bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-center relative overflow-hidden min-h-[400px] order-1 lg:order-2">
         {loading && <LoadingOverlay message="Transforming reality..." />}
         
+        {errorMsg && !loading && (
+             <div className="absolute inset-0 z-40 flex items-center justify-center p-6 bg-slate-900/90">
+                 <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-6 max-w-md text-center flex flex-col items-center animate-fade-in">
+                     <AlertTriangle className="text-red-400 w-10 h-10 mb-3" />
+                     <h3 className="text-red-200 font-bold mb-2">Edit Failed</h3>
+                     <p className="text-red-300/80 text-sm mb-4">{errorMsg}</p>
+                     <Button variant="outline" size="sm" onClick={() => setErrorMsg(null)}>Dismiss</Button>
+                 </div>
+             </div>
+        )}
+
         {resultImage ? (
           <div className="w-full h-full p-6 grid grid-cols-1 md:grid-cols-2 gap-6 group overflow-y-auto">
               <div className="flex flex-col gap-3 h-full min-h-[300px]">
@@ -1007,7 +1062,7 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
                   </div>
               </div>
           </div>
-        ) : (
+        ) : !errorMsg && (
           <div className="text-center text-slate-600 p-8">
             <Wand2 className="w-16 h-16 mx-auto mb-4 opacity-20" />
             <p className="text-lg">Upload an image and choose a magic tool.</p>
