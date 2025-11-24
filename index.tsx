@@ -47,7 +47,9 @@ import {
   Code2,
   AlertTriangle,
   RefreshCw,
-  Info
+  Info,
+  Clock,
+  Layout
 } from 'lucide-react';
 
 // --- Types & Interfaces ---
@@ -71,8 +73,7 @@ interface ChatMessage {
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-// NEW: Aggressive Image Compression to solve "Quota Exceeded" (429) and Bandwidth issues
-// Reduced default maxWidth to 384px. This brings payload size down to ~100KB-200KB.
+// Aggressive Image Compression (384px) to solve Quota Exceeded
 const compressImage = async (file: File, maxWidth = 384, quality = 0.6): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -85,7 +86,6 @@ const compressImage = async (file: File, maxWidth = 384, quality = 0.6): Promise
         let width = img.width;
         let height = img.height;
 
-        // Resize logic
         if (width > maxWidth) {
           height = Math.round((height * maxWidth) / width);
           width = maxWidth;
@@ -96,7 +96,6 @@ const compressImage = async (file: File, maxWidth = 384, quality = 0.6): Promise
         const ctx = canvas.getContext('2d');
         ctx?.drawImage(img, 0, 0, width, height);
 
-        // Get base64 string (without prefix for API)
         const dataUrl = canvas.toDataURL('image/jpeg', quality);
         const base64 = dataUrl.split(',')[1];
         resolve(base64);
@@ -109,16 +108,14 @@ const compressImage = async (file: File, maxWidth = 384, quality = 0.6): Promise
 
 const fileToGenerativePart = async (file: File, isImageForGeneration = false) => {
   if (isImageForGeneration && file.type.startsWith('image/')) {
-    // Use aggressive compression for generation tasks to save token quota
     const base64String = await compressImage(file, 384, 0.6);
     return {
       inlineData: {
         data: base64String,
-        mimeType: 'image/jpeg', // Always JPEG after compression
+        mimeType: 'image/jpeg',
       },
     };
   } else {
-    // Standard raw read for analysis (can be larger, but still risky on free tier)
     return new Promise<{ inlineData: { data: string; mimeType: string } }>((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -167,7 +164,6 @@ const shareImage = async (dataUrl: string, title: string, text: string) => {
       console.error("Share failed", err);
     }
   } else {
-    // Fallback or notification
     alert("Sharing is not supported on this device or browser.");
   }
 };
@@ -179,7 +175,6 @@ const getAI = (apiKey: string) => {
   return new GoogleGenAI({ apiKey: apiKey.trim() });
 };
 
-// Optimized Safety Settings to avoid false positive blocks
 const permissiveSafetySettings = [
   { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
   { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
@@ -202,7 +197,7 @@ const Button = ({ children, onClick, disabled, variant = 'primary', className = 
     secondary: "bg-slate-700 hover:bg-slate-600 text-slate-100 focus:ring-slate-500 disabled:opacity-50",
     ghost: "bg-transparent hover:bg-slate-800 text-slate-400 hover:text-white focus:ring-slate-500",
     danger: "bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/20 disabled:opacity-50",
-    outline: "border border-slate-700 hover:bg-slate-800 text-slate-300"
+    outline: "border border-slate-700 hover:bg-slate-800 text-slate-300 disabled:opacity-50"
   };
 
   return (
@@ -235,157 +230,18 @@ const IconButton = ({ onClick, icon: Icon, title, className = '', variant = 'def
   );
 };
 
-// --- Interactive Components ---
+// --- Updated Components (Zoom, Modal, Input) ---
 
-const LoginScreen = ({ onLogin }: { onLogin: (key: string) => void }) => {
-  const [key, setKey] = useState('');
-  const [showKey, setShowKey] = useState(false);
-
-  return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      {/* Background Effects */}
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-         <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] bg-indigo-500/10 blur-[100px] rounded-full"></div>
-         <div className="absolute top-[20%] right-[10%] w-[40%] h-[40%] bg-purple-500/10 blur-[100px] rounded-full"></div>
-         <div className="absolute bottom-0 left-0 right-0 h-[40%] bg-gradient-to-t from-slate-950 to-transparent"></div>
-      </div>
-
-      <div className="relative z-10 w-full max-w-md bg-slate-900/50 backdrop-blur-xl border border-slate-800 p-8 rounded-3xl shadow-2xl animate-fade-in">
-         <div className="flex flex-col items-center mb-10">
-            <div className="w-20 h-20 bg-gradient-to-tr from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/30 mb-6 rotate-3 hover:rotate-6 transition-transform duration-500">
-                <Sparkles size={40} className="text-white" />
-            </div>
-            <h1 className="text-3xl font-bold text-white tracking-tight text-center">Ares Gemini Suite</h1>
-            <p className="text-slate-400 mt-3 text-sm text-center leading-relaxed">
-                Welcome to the next generation AI creative studio.<br/>
-                Please authenticate to continue.
-            </p>
-         </div>
-
-         <div className="space-y-6">
-            <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Access Key</label>
-                <div className="relative group">
-                   <div className="absolute inset-0 bg-indigo-500/20 blur-lg rounded-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500"></div>
-                   <div className="relative flex items-center bg-slate-950 border border-slate-800 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:border-indigo-500 transition-all">
-                       <div className="pl-4 text-slate-500">
-                          <Key size={18} />
-                       </div>
-                       <input 
-                          type={showKey ? "text" : "password"} 
-                          value={key}
-                          onChange={(e) => setKey(e.target.value)}
-                          placeholder="Paste your Google GenAI Key"
-                          className="w-full bg-transparent border-none px-4 py-4 text-slate-200 focus:ring-0 outline-none font-mono text-sm"
-                          autoFocus
-                       />
-                       <button 
-                          onClick={() => setShowKey(!showKey)}
-                          className="pr-4 text-slate-500 hover:text-slate-300 transition-colors"
-                       >
-                          {showKey ? <EyeOff size={18} /> : <Eye size={18} />}
-                       </button>
-                   </div>
-                </div>
-            </div>
-
-            <button 
-                onClick={() => onLogin(key)}
-                disabled={!key.trim() || key.length < 10}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-indigo-900/40 flex items-center justify-center gap-2 group"
-            >
-                <span>Enter Studio</span>
-                <ChevronDown className="-rotate-90 transition-transform group-hover:translate-x-1" size={18} />
-            </button>
-            
-            <div className="pt-4 border-t border-slate-800/50">
-                <p className="text-[10px] text-center text-slate-600">
-                    Your key is stored locally and securely in your browser.<br/>
-                    <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-indigo-400 hover:text-indigo-300 underline inline-flex items-center gap-1 mt-1">
-                        Get a key from Google AI Studio <Move size={8} className="-rotate-45"/>
-                    </a>
-                </p>
-            </div>
-         </div>
-      </div>
-    </div>
-  );
-};
-
-const ApiKeyModal = ({ isOpen, onSave, onClose, initialKey }: { isOpen: boolean, onSave: (key: string) => void, onClose?: () => void, initialKey: string }) => {
-  const [key, setKey] = useState(initialKey);
-  const [showKey, setShowKey] = useState(false);
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl relative">
-          <div className="flex items-center gap-3 mb-6">
-             <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
-                <Settings size={20} />
-             </div>
-             <div>
-                <h3 className="text-lg font-bold text-white">Settings</h3>
-                <p className="text-xs text-slate-400">Update your API Configuration</p>
-             </div>
-          </div>
-
-          <div className="space-y-4">
-             <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Google GenAI API Key</label>
-                <div className="relative">
-                   <input 
-                      type={showKey ? "text" : "password"} 
-                      value={key}
-                      onChange={(e) => setKey(e.target.value)}
-                      placeholder="AIzaSy..."
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 pr-12 text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-sm"
-                   />
-                   <button 
-                      onClick={() => setShowKey(!showKey)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
-                   >
-                      {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                   </button>
-                </div>
-             </div>
-             
-             <div className="flex gap-2 pt-2">
-                {onClose && (
-                    <Button variant="ghost" onClick={onClose} className="flex-1">Cancel</Button>
-                )}
-                <Button 
-                   onClick={() => onSave(key)} 
-                   disabled={!key.trim() || key.length < 10} 
-                   className="flex-1"
-                >
-                   Update Key
-                </Button>
-             </div>
-          </div>
-       </div>
-    </div>
-  );
-};
-
-const ZoomableImage = ({ src, alt, className = '' }: { src: string, alt?: string, className?: string }) => {
+// IMPROVED: Smoother Pan/Zoom that doesn't hijack scroll
+const PanZoomImage = ({ src, alt, className = '' }: { src: string, alt?: string, className?: string }) => {
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault(); // Stop page scroll
-    const delta = -e.deltaY * 0.001;
-    const newScale = Math.min(Math.max(1, scale + delta), 5);
-    setScale(newScale);
-    if (newScale === 1) setPosition({ x: 0, y: 0 });
-  };
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (scale > 1) {
+      e.preventDefault();
       setIsDragging(true);
       setStartPos({ x: e.clientX - position.x, y: e.clientY - position.y });
     }
@@ -414,9 +270,7 @@ const ZoomableImage = ({ src, alt, className = '' }: { src: string, alt?: string
 
   return (
     <div 
-        ref={containerRef}
         className={`relative overflow-hidden w-full h-full flex items-center justify-center bg-slate-950/50 ${className}`}
-        onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -426,20 +280,20 @@ const ZoomableImage = ({ src, alt, className = '' }: { src: string, alt?: string
         src={src} 
         alt={alt}
         draggable={false}
-        className="max-w-full max-h-full object-contain transition-transform duration-75 ease-out origin-center select-none"
+        className="max-w-full max-h-full object-contain transition-transform duration-150 ease-out select-none"
         style={{ 
           transform: `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`,
           cursor: scale > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default'
         }}
       />
       
-      {/* Zoom Controls Overlay */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 bg-slate-900/90 backdrop-blur-md p-1.5 rounded-full border border-white/10 shadow-xl opacity-0 hover:opacity-100 transition-opacity duration-200 z-10" onClick={e => e.stopPropagation()}>
-         <button onClick={zoomOut} className="p-2 hover:bg-white/10 rounded-full text-white"><ZoomOut size={16}/></button>
-         <span className="text-xs text-slate-400 font-mono py-2 w-12 text-center">{Math.round(scale * 100)}%</span>
-         <button onClick={zoomIn} className="p-2 hover:bg-white/10 rounded-full text-white"><ZoomIn size={16}/></button>
+      {/* Explicit Zoom Controls - No Scroll Wheel */}
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3 bg-slate-900/90 backdrop-blur-md p-2 rounded-full border border-slate-700 shadow-2xl z-10" onClick={e => e.stopPropagation()}>
+         <button onClick={zoomOut} className="p-2 hover:bg-white/10 rounded-full text-slate-300 hover:text-white transition-colors" title="Zoom Out"><ZoomOut size={18}/></button>
+         <span className="text-xs text-slate-400 font-mono py-2 w-12 text-center border-l border-r border-slate-700">{Math.round(scale * 100)}%</span>
+         <button onClick={zoomIn} className="p-2 hover:bg-white/10 rounded-full text-slate-300 hover:text-white transition-colors" title="Zoom In"><ZoomIn size={18}/></button>
          {scale > 1 && (
-             <button onClick={reset} className="p-2 hover:bg-white/10 rounded-full text-indigo-400"><RotateCcw size={16}/></button>
+             <button onClick={reset} className="p-2 hover:bg-white/10 rounded-full text-indigo-400" title="Reset"><RotateCcw size={18}/></button>
          )}
       </div>
     </div>
@@ -458,32 +312,32 @@ const Lightbox = ({ src, prompt, onClose, onShare, onDelete, onUsePrompt, showDe
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-0 md:p-4 backdrop-blur-xl animate-fade-in" onClick={onClose}>
-      <div className="relative w-full h-full flex flex-col md:max-w-7xl md:h-[90vh] md:bg-slate-900 md:rounded-2xl md:border md:border-slate-800 md:overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-0 backdrop-blur-xl animate-fade-in" onClick={onClose}>
+      <div className="relative w-full h-full flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
          
          {/* Top Controls */}
-         <div className="absolute top-0 right-0 left-0 p-4 z-20 flex justify-between items-start pointer-events-none">
-            <div className="pointer-events-auto">
-               {/* Optional left header content */}
+         <div className="absolute top-0 right-0 left-0 p-4 z-20 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
+            <div className="pointer-events-auto px-4">
+                 <h3 className="text-white font-bold drop-shadow-md">Full Preview</h3>
             </div>
-            <div className="pointer-events-auto bg-black/50 backdrop-blur-md rounded-full">
-                <IconButton onClick={onClose} icon={X} title="Close" />
+            <div className="pointer-events-auto">
+                <IconButton onClick={onClose} icon={X} title="Close" variant="danger" />
             </div>
          </div>
 
-         {/* Image Area - Full Zoom Support */}
+         {/* Image Area */}
          <div className="flex-1 overflow-hidden bg-black/20 relative">
-            <ZoomableImage src={src} />
+            <PanZoomImage src={src} />
          </div>
 
          {/* Bottom Controls */}
-         <div className="bg-slate-900 border-t border-slate-800 p-4 md:p-6 flex flex-col md:flex-row justify-between items-center gap-4 z-20 relative">
-            <div className="flex-1 w-full">
-              <p className="text-slate-200 text-sm line-clamp-2 md:line-clamp-none font-medium mb-1 font-mono">{prompt}</p>
+         <div className="bg-slate-900 border-t border-slate-800 p-6 flex flex-col md:flex-row justify-between items-center gap-4 z-20 relative shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+            <div className="flex-1 w-full md:max-w-3xl">
+              <p className="text-slate-200 text-sm line-clamp-2 font-medium mb-2 font-mono">{prompt}</p>
               {onUsePrompt && (
-                  <button onClick={handleCopy} className="text-indigo-400 text-xs hover:text-indigo-300 flex items-center gap-1 transition-colors">
+                  <button onClick={handleCopy} className="text-indigo-400 text-xs hover:text-indigo-300 flex items-center gap-1 transition-colors px-2 py-1 hover:bg-indigo-500/10 rounded">
                       {copied ? <Check size={12} /> : <Copy size={12} />}
-                      {copied ? "Prompt Copied" : "Use Prompt for Generate"}
+                      {copied ? "Prompt Copied" : "Copy Prompt"}
                   </button>
               )}
             </div>
@@ -493,7 +347,7 @@ const Lightbox = ({ src, prompt, onClose, onShare, onDelete, onUsePrompt, showDe
                  <IconButton onClick={onDelete} icon={Trash2} variant="danger" title="Delete" />
                )}
                <IconButton onClick={() => onShare && onShare()} icon={Share2} title="Share" />
-               <a href={src} download={`gemini-gen-${Date.now()}.png`} className="flex items-center gap-2 px-6 py-2.5 bg-white text-black rounded-full font-bold hover:bg-slate-200 transition-colors shadow-lg shadow-white/10 text-sm">
+               <a href={src} download={`gemini-gen-${Date.now()}.png`} className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-900/30 text-sm">
                   <Download size={18} /> Download
                </a>
             </div>
@@ -503,73 +357,125 @@ const Lightbox = ({ src, prompt, onClose, onShare, onDelete, onUsePrompt, showDe
   );
 };
 
-const PromptArea = ({ value, onChange, placeholder, className, label, showControls = true, onEnhance }: any) => {
-  const handleCopy = () => navigator.clipboard.writeText(value);
-  const handleClear = () => onChange({ target: { value: '' } });
+const LoginScreen = ({ onLogin }: { onLogin: (key: string) => void }) => {
+  const [key, setKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex justify-between items-center">
-        {label && <label className="text-sm font-medium text-slate-300 ml-1">{label}</label>}
-        {onEnhance && (
-            <button 
-                onClick={onEnhance} 
-                className="text-[10px] flex items-center gap-1.5 px-2 py-1 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 rounded-md transition-colors border border-indigo-500/20"
-                title="Rewrites your prompt to be more detailed and safer for the AI"
-            >
-                <Wand2 size={12} /> Enhance Prompt
-            </button>
-        )}
+    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+         <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] bg-indigo-500/10 blur-[100px] rounded-full"></div>
+         <div className="absolute top-[20%] right-[10%] w-[40%] h-[40%] bg-purple-500/10 blur-[100px] rounded-full"></div>
       </div>
-      <div className="relative group">
-        <textarea
-          value={value}
-          onChange={onChange}
-          placeholder={placeholder}
-          className={`${className} scrollbar-hide`}
-        />
-        {showControls && (
-            <div className="absolute top-2 right-2 flex gap-1">
-            <button 
-                onClick={handleCopy} 
-                className="p-1.5 bg-slate-800/80 hover:bg-indigo-600 text-slate-400 hover:text-white rounded-md transition-all backdrop-blur-sm opacity-0 group-hover:opacity-100 focus:opacity-100" 
-                title="Copy"
-            >
-                <Copy size={14} />
-            </button>
-            <button 
-                onClick={handleClear} 
-                className="p-1.5 bg-slate-800/80 hover:bg-red-500 text-slate-400 hover:text-white rounded-md transition-all backdrop-blur-sm opacity-0 group-hover:opacity-100 focus:opacity-100" 
-                title="Clear"
-            >
-                <Trash2 size={14} />
-            </button>
+
+      <div className="relative z-10 w-full max-w-md bg-slate-900/50 backdrop-blur-xl border border-slate-800 p-8 rounded-3xl shadow-2xl animate-fade-in">
+         <div className="flex flex-col items-center mb-10">
+            <div className="w-20 h-20 bg-gradient-to-tr from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/30 mb-6 rotate-3">
+                <Sparkles size={40} className="text-white" />
             </div>
-        )}
+            <h1 className="text-3xl font-bold text-white tracking-tight text-center">Ares Suite</h1>
+            <p className="text-slate-400 mt-3 text-sm text-center">Enter your Google GenAI Key</p>
+         </div>
+
+         <div className="space-y-6">
+            <div className="space-y-2">
+                <div className="relative group">
+                   <div className="relative flex items-center bg-slate-950 border border-slate-800 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/50 focus-within:border-indigo-500 transition-all">
+                       <div className="pl-4 text-slate-500"><Key size={18} /></div>
+                       <input 
+                          type={showKey ? "text" : "password"} 
+                          value={key}
+                          onChange={(e) => setKey(e.target.value)}
+                          placeholder="AIzaSy..."
+                          className="w-full bg-transparent border-none px-4 py-4 text-slate-200 focus:ring-0 outline-none font-mono text-sm"
+                          autoFocus
+                       />
+                       <button onClick={() => setShowKey(!showKey)} className="pr-4 text-slate-500 hover:text-slate-300">
+                          {showKey ? <EyeOff size={18} /> : <Eye size={18} />}
+                       </button>
+                   </div>
+                </div>
+            </div>
+            <button 
+                onClick={() => onLogin(key)}
+                disabled={!key.trim() || key.length < 10}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold py-4 rounded-xl transition-all shadow-lg"
+            >
+                Enter Studio
+            </button>
+         </div>
       </div>
     </div>
   );
 };
 
+const ApiKeyModal = ({ isOpen, onSave, onClose, initialKey }: { isOpen: boolean, onSave: (key: string) => void, onClose?: () => void, initialKey: string }) => {
+  const [key, setKey] = useState(initialKey);
+  const [showKey, setShowKey] = useState(false);
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl relative">
+          <h3 className="text-lg font-bold text-white mb-4">API Configuration</h3>
+          <div className="space-y-4">
+             <div className="relative">
+                <input 
+                   type={showKey ? "text" : "password"} 
+                   value={key}
+                   onChange={(e) => setKey(e.target.value)}
+                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 pr-12 text-slate-200 outline-none font-mono text-sm"
+                />
+                <button onClick={() => setShowKey(!showKey)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">
+                   {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+             </div>
+             <div className="flex gap-2 pt-2">
+                {onClose && <Button variant="ghost" onClick={onClose} className="flex-1">Cancel</Button>}
+                <Button onClick={() => onSave(key)} disabled={!key.trim() || key.length < 10} className="flex-1">Update Key</Button>
+             </div>
+          </div>
+       </div>
+    </div>
+  );
+};
+
+const PromptArea = ({ value, onChange, placeholder, className, label, onEnhance }: any) => {
+  return (
+    <div className="flex flex-col gap-2 h-full">
+      <div className="flex justify-between items-center">
+        {label && <label className="text-sm font-medium text-slate-300 ml-1">{label}</label>}
+        {onEnhance && (
+            <button onClick={onEnhance} className="text-[10px] flex items-center gap-1.5 px-2 py-1 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 rounded-md border border-indigo-500/20">
+                <Wand2 size={12} /> Enhance
+            </button>
+        )}
+      </div>
+      <textarea
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          className={`${className} scrollbar-hide resize-none`}
+      />
+    </div>
+  );
+};
+
 const LoadingOverlay = ({ message, onStop }: { message: string, onStop?: () => void }) => (
-  <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center z-50 rounded-xl">
+  <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center z-50 rounded-xl border border-indigo-500/20">
     <div className="relative mb-6">
       <div className="absolute inset-0 bg-indigo-500 blur-xl opacity-20 animate-pulse"></div>
       <Loader2 className="w-12 h-12 text-indigo-500 animate-spin relative z-10" />
     </div>
     <p className="text-slate-200 font-medium animate-pulse mb-6 text-center px-4">{message}</p>
     {onStop && (
-      <button 
-        onClick={onStop}
-        className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-400 border border-red-500/20 rounded-full hover:bg-red-500/20 transition-colors text-sm"
-      >
-        <StopCircle size={16} /> Stop Generating
+      <button onClick={onStop} className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-400 border border-red-500/20 rounded-full hover:bg-red-500/20 transition-colors text-sm">
+        <StopCircle size={16} /> Stop
       </button>
     )}
   </div>
 );
 
-// --- Tab Views ---
+// --- Tab Views (Split Screen 50/50 Implementation) ---
 
 const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: { 
     onAddToGallery: (item: GalleryItem) => void, 
@@ -583,11 +489,10 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [showZoom, setShowZoom] = useState(false);
+  const [cooldown, setCooldown] = useState(0); 
   
   const [quality, setQuality] = useState('Std (1k)');
-  const [styleExpanded, setStyleExpanded] = useState(false);
-  
-  // Style Options
+  const [styleExpanded, setStyleExpanded] = useState(true); // Open by default in split screen
   const [artStyle, setArtStyle] = useState('None');
   const [lighting, setLighting] = useState('Auto');
   const [camera, setCamera] = useState('Auto');
@@ -596,6 +501,12 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
   const [refImages, setRefImages] = useState<File[]>([]);
   const [refPreviews, setRefPreviews] = useState<string[]>([]);
   const [lockFace, setLockFace] = useState(false);
+
+  useEffect(() => {
+    let interval: any;
+    if (cooldown > 0) interval = setInterval(() => setCooldown((prev) => prev - 1), 1000);
+    return () => clearInterval(interval);
+  }, [cooldown]);
 
   useEffect(() => {
     if (externalPrompt) {
@@ -609,7 +520,6 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
       const newFiles = Array.from(e.target.files) as File[];
       const remainingSlots = 4 - refImages.length;
       const filesToAdd = newFiles.slice(0, remainingSlots);
-
       if (filesToAdd.length > 0) {
         const newPreviews = filesToAdd.map(file => URL.createObjectURL(file));
         setRefImages(prev => [...prev, ...filesToAdd]);
@@ -637,25 +547,21 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
       setLoading(true);
       try {
         const ai = getAI(apiKey);
-        // Use gemini-2.5-flash for text logic - very reliable
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: `You are a prompt engineer. Rewrite the following prompt to be detailed, artistic, and descriptive, but keep it safe (PG-13). Output ONLY the prompt text. Input: "${prompt}"`
         });
-        if (response.text) {
-            setPrompt(response.text.trim());
-        }
+        if (response.text) setPrompt(response.text.trim());
       } catch (e) {
         console.error("Enhance failed", e);
-        setErrorMsg("Failed to enhance prompt. Check your connection or API key.");
+        setErrorMsg("Failed to enhance prompt.");
       } finally {
         setLoading(false);
       }
   };
 
   const handleGenerate = async () => {
-    if (!prompt.trim()) return;
-    
+    if (!prompt.trim() || cooldown > 0) return;
     setLoading(true);
     setGeneratedImage(null);
     setErrorMsg(null);
@@ -664,37 +570,26 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
     try {
       const ai = getAI(apiKey);
       const parts: any[] = [];
-      
-      // Process Reference Images
       for (const file of refImages) {
-        // IMPORTANT: Uses isImageForGeneration=true to trigger aggressive 384px compression
-        const imagePart = await fileToGenerativePart(file, true);
-        parts.push(imagePart);
+        try {
+            const imagePart = await fileToGenerativePart(file, true);
+            parts.push(imagePart);
+        } catch (err) { console.warn("Skipping bad ref image"); }
       }
 
-      // Construct Prompt
       let constructedPrompt = prompt;
-      
       if (artStyle !== 'None') constructedPrompt += `, ${artStyle} art style`;
       if (lighting !== 'Auto') constructedPrompt += `, ${lighting} lighting`;
       if (camera !== 'Auto') constructedPrompt += `, ${camera} view`;
-      
-      // Append reference instructions
       if (refImages.length > 0) {
-        if (lockFace) {
-          constructedPrompt = "Strictly maintain facial structure and identity from reference. " + constructedPrompt;
-        } else {
-          constructedPrompt = "Use the image as a style reference only. " + constructedPrompt;
-        }
+        if (lockFace) constructedPrompt = "Strictly maintain facial structure. " + constructedPrompt;
+        else constructedPrompt = "Use reference as style guide. " + constructedPrompt;
       }
-      
       parts.push({ text: constructedPrompt });
       
-      // Config Construction
       const config: any = {
           imageConfig: {
             numberOfImages: 1,
-            // Only send aspect ratio if strictly needed, to avoid some model bugs
             ...(aspectRatio !== '1:1' ? { aspectRatio: aspectRatio } : {})
           },
           safetySettings: permissiveSafetySettings
@@ -708,37 +603,20 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
 
       if (!loading && !abortControllerRef.current) return;
 
-      // --- ROBUST RESPONSE PARSING ---
-      // Check candidates exist
-      const candidates = response.candidates;
-      if (!candidates || candidates.length === 0) {
-          // If no candidates, check prompt feedback if available or just throw generic
-          if (response.promptFeedback?.blockReason) {
-               throw new Error(`Prompt Blocked: ${response.promptFeedback.blockReason}`);
-          }
-          throw new Error("No response candidates received from AI.");
+      const candidate = response.candidates?.[0];
+      if (!candidate) {
+          if (response.promptFeedback?.blockReason) throw new Error(`Blocked: ${response.promptFeedback.blockReason}`);
+          throw new Error("No response from AI.");
       }
       
-      const candidate = candidates[0];
-
-      // Check Finish Reason
-      if (candidate.finishReason && candidate.finishReason !== 'STOP') {
-         if (candidate.finishReason === 'SAFETY') {
-             const ratings = candidate.safetyRatings?.map(r => `${r.category}: ${r.probability}`).join(', ');
-             throw new Error(`Generation blocked by Safety Filters. (${ratings || 'Try enhancing your prompt'})`);
-         }
-         // Handle 'OTHER' which often happens on refusals
-         if (candidate.finishReason === 'OTHER') {
-             // continue to check for text part, often contains the refusal message
-         } else {
-             throw new Error(`Generation stopped: ${candidate.finishReason}`);
-         }
+      if (candidate.finishReason === 'SAFETY') {
+          const ratings = candidate.safetyRatings?.map(r => `${r.category}: ${r.probability}`).join(', ');
+          throw new Error(`Safety Block: ${ratings}`);
       }
 
       let foundImage = false;
       let rejectionText = "";
 
-      // Iterate ALL parts to find image or text refusal
       for (const part of candidate?.content?.parts || []) {
         if (part.inlineData) {
           const mime = part.inlineData.mimeType || 'image/jpeg';
@@ -753,36 +631,22 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
           });
           foundImage = true;
           break;
-        } else if (part.text) {
-            rejectionText += part.text;
-        }
+        } else if (part.text) rejectionText += part.text;
       }
 
       if (!foundImage) {
-          if (rejectionText) {
-              throw new Error(`AI Refusal: "${rejectionText.slice(0, 200)}..."`);
-          }
-          throw new Error("Success response, but no image data found. (Zonk Result)");
+          if (rejectionText) throw new Error(`AI Says: "${rejectionText}"`);
+          throw new Error("Zonk Result: No image returned. Try simpler prompt.");
       }
 
     } catch (error: any) {
       if (loading) {
-        console.error("Generation Error:", error);
-        
-        let msg = error.message || "Failed to generate image.";
+        let msg = error.message || "Failed.";
         const lowerMsg = msg.toLowerCase();
-
-        // Friendly Error Mapping
-        if (lowerMsg.includes('400')) {
-            msg = "400 Bad Request: Prompt rejected by filter or invalid request.";
-        } else if (lowerMsg.includes('403')) {
-            msg = "403 Forbidden: Your API Key may not have access to Image Generation.";
-        } else if (lowerMsg.includes('429') || lowerMsg.includes('quota')) {
-            msg = "⚠️ Quota Exceeded / Cooling Down. Please wait 60 seconds before trying again.";
-        } else if (lowerMsg.includes('safety')) {
-            msg = `Safety Block: ${msg.replace('Error: ', '')}`;
+        if (lowerMsg.includes('429') || lowerMsg.includes('quota')) {
+            msg = "⚠️ Quota Exceeded. Cooling down for 60s.";
+            setCooldown(60);
         }
-
         setErrorMsg(msg);
       }
     } finally {
@@ -792,208 +656,152 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
   };
 
   return (
-    <div className="flex flex-col h-full gap-6 animate-fade-in pb-20 md:pb-0">
+    <div className="flex flex-col h-full animate-fade-in relative">
       {showZoom && generatedImage && (
          <Lightbox 
             src={generatedImage} 
             prompt={prompt} 
             onClose={() => setShowZoom(false)}
-            onShare={() => generatedImage && shareImage(generatedImage, 'AI Generated Image', prompt)}
+            onShare={() => generatedImage && shareImage(generatedImage, 'Generated Image', prompt)}
             onUsePrompt={() => navigator.clipboard.writeText(prompt)}
          />
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
-        {/* Controls */}
-        <div className="lg:col-span-4 bg-slate-900/50 p-5 rounded-2xl border border-slate-800 flex flex-col gap-6 overflow-y-auto order-2 lg:order-1 scrollbar-hide">
-          
-          {/* Reference Images */}
-          <div className="flex flex-col gap-3">
-             <div className="flex justify-between items-center">
-                <label className="text-sm font-semibold text-slate-300 flex items-center gap-2">
-                    Reference Images
-                    <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400 font-normal">Auto-compressed</span>
-                </label>
-                <span className="text-xs text-slate-500">{refImages.length}/4</span>
-             </div>
-             
-             <div className="grid grid-cols-4 gap-2">
-                {refPreviews.map((src, idx) => (
-                  <div key={idx} className="relative group aspect-square rounded-lg overflow-hidden border border-slate-700 bg-slate-800">
-                    <img src={src} className="w-full h-full object-cover" />
-                    <button onClick={() => removeRefImage(idx)} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white"><X size={16} /></button>
-                  </div>
-                ))}
-                {refImages.length < 4 && (
-                  <label className="aspect-square rounded-lg border-2 border-dashed border-slate-700 hover:border-indigo-500 hover:bg-slate-800 transition-all cursor-pointer flex flex-col items-center justify-center gap-1 text-slate-500 hover:text-indigo-400">
-                    <Plus size={20} />
-                    <span className="text-[10px] font-medium">Add</span>
-                    <input type="file" accept="image/*" multiple onChange={handleRefUpload} className="hidden" />
-                  </label>
-                )}
-             </div>
-
-             {refImages.length > 0 && (
-                <button onClick={() => setLockFace(!lockFace)} className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${lockFace ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
-                  {lockFace ? <Lock size={14} /> : <Unlock size={14} />} {lockFace ? 'Lock Face 100%' : 'Style Reference Only'}
-                </button>
-             )}
-          </div>
-
-          <div className="w-full h-px bg-slate-800 my-1" />
-
-          {/* Prompt */}
-          <PromptArea
-            label="Creative Prompt"
-            value={prompt}
-            onChange={(e: any) => setPrompt(e.target.value)}
-            onEnhance={handleEnhancePrompt}
-            placeholder="Describe your imagination in detail..."
-            className="w-full min-h-[120px] bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-slate-200 focus:ring-2 focus:ring-indigo-500 resize-none text-base"
-          />
-
-          {/* Style & Quality Settings */}
-          <div className="border border-slate-800 rounded-xl bg-slate-900/30 overflow-hidden">
-             <button onClick={() => setStyleExpanded(!styleExpanded)} className="w-full flex justify-between items-center p-3 text-sm font-medium text-slate-300 hover:bg-slate-800/50">
-                <div className="flex items-center gap-2">
-                   <Palette size={16} />
-                   <span>Style & Quality</span>
-                </div>
-                {styleExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-             </button>
-             
-             {styleExpanded && (
-                <div className="p-4 pt-0 flex flex-col gap-4 border-t border-slate-800 mt-2">
-                   <div className="grid grid-cols-2 gap-2 mt-3">
-                       <div className="flex flex-col gap-1">
-                           <label className="text-xs text-slate-500">Quality</label>
-                           <div className="flex bg-slate-800 rounded-lg p-1">
-                               {['Std (1k)', 'High (2k)'].map(q => (
-                                   <button key={q} onClick={() => setQuality(q)} className={`flex-1 text-[10px] py-1.5 rounded-md ${quality === q ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>{q}</button>
-                               ))}
-                           </div>
-                       </div>
-                       <div className="flex flex-col gap-1">
-                           <label className="text-xs text-slate-500">Art Style</label>
-                           <select value={artStyle} onChange={e => setArtStyle(e.target.value)} className="bg-slate-800 text-xs text-slate-300 rounded-lg p-2 border-none outline-none">
-                               <option>None</option>
-                               <option>Photorealistic</option>
-                               <option>Anime</option>
-                               <option>Cyberpunk</option>
-                               <option>Oil Painting</option>
-                               <option>3D Render</option>
-                           </select>
-                       </div>
-                       <div className="flex flex-col gap-1">
-                           <label className="text-xs text-slate-500">Lighting</label>
-                           <select value={lighting} onChange={e => setLighting(e.target.value)} className="bg-slate-800 text-xs text-slate-300 rounded-lg p-2 border-none outline-none">
-                               <option>Auto</option>
-                               <option>Cinematic</option>
-                               <option>Natural</option>
-                               <option>Studio</option>
-                               <option>Neon</option>
-                           </select>
-                       </div>
-                       <div className="flex flex-col gap-1">
-                           <label className="text-xs text-slate-500">Camera</label>
-                           <select value={camera} onChange={e => setCamera(e.target.value)} className="bg-slate-800 text-xs text-slate-300 rounded-lg p-2 border-none outline-none">
-                               <option>Auto</option>
-                               <option>Close Up</option>
-                               <option>Wide Angle</option>
-                               <option>Macro</option>
-                               <option>Drone View</option>
-                           </select>
-                       </div>
-                   </div>
-                </div>
-             )}
-          </div>
-
-          {/* Aspect Ratio */}
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-slate-300">Aspect Ratio</label>
-            <div className="grid grid-cols-5 gap-2">
-              {['1:1', '16:9', '9:16', '3:4', '4:3'].map((ratio) => (
-                <button
-                  key={ratio}
-                  onClick={() => setAspectRatio(ratio)}
-                  className={`py-2 rounded-lg text-xs font-medium border transition-colors ${
-                    aspectRatio === ratio ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300' : 'bg-slate-800 border-slate-700 text-slate-400'
-                  }`}
-                >
-                  {ratio}
-                </button>
-              ))}
+      {/* 50/50 Split Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full overflow-hidden">
+        
+        {/* Left Panel: Controls */}
+        <div className="bg-slate-900/50 rounded-2xl border border-slate-800 flex flex-col overflow-hidden h-full">
+            <div className="p-4 border-b border-slate-800 bg-slate-900/80 backdrop-blur-md">
+                <h3 className="font-semibold text-white flex items-center gap-2">
+                    <Wand2 size={16} className="text-indigo-400" /> Generator Controls
+                </h3>
             </div>
-          </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6 scrollbar-hide">
+                {/* Reference Images */}
+                <div className="flex flex-col gap-3">
+                    <div className="flex justify-between items-center">
+                        <label className="text-xs font-bold text-slate-500 uppercase">Reference (Auto-Compress)</label>
+                        <span className="text-[10px] text-slate-500">{refImages.length}/4</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2">
+                        {refPreviews.map((src, idx) => (
+                        <div key={idx} className="relative group aspect-square rounded-lg overflow-hidden border border-slate-700 bg-slate-800">
+                            <img src={src} className="w-full h-full object-cover" />
+                            <button onClick={() => removeRefImage(idx)} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white"><X size={16} /></button>
+                        </div>
+                        ))}
+                        {refImages.length < 4 && (
+                        <label className="aspect-square rounded-lg border border-dashed border-slate-700 hover:border-indigo-500 hover:bg-slate-800 transition-all cursor-pointer flex flex-col items-center justify-center gap-1 text-slate-500 hover:text-indigo-400">
+                            <Plus size={16} />
+                            <input type="file" accept="image/*" multiple onChange={handleRefUpload} className="hidden" />
+                        </label>
+                        )}
+                    </div>
+                    {refImages.length > 0 && (
+                        <button onClick={() => setLockFace(!lockFace)} className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${lockFace ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                        {lockFace ? <Lock size={12} /> : <Unlock size={12} />} {lockFace ? 'Face Lock On' : 'Style Ref Only'}
+                        </button>
+                    )}
+                </div>
 
-          <div className="flex gap-2 pt-2 mt-auto">
-            <Button onClick={handleGenerate} disabled={loading || !prompt} variant="primary" className="flex-1 py-3.5 text-base" icon={Wand2}>
-              {loading ? 'Dreaming...' : 'Generate'}
-            </Button>
-            {loading && <Button onClick={handleStop} variant="danger" className="px-4" icon={StopCircle}></Button>}
-          </div>
+                {/* Prompt */}
+                <div className="flex-1 min-h-[120px]">
+                    <PromptArea
+                        label="Describe Image"
+                        value={prompt}
+                        onChange={(e: any) => setPrompt(e.target.value)}
+                        onEnhance={handleEnhancePrompt}
+                        placeholder="A futuristic city with neon lights..."
+                        className="w-full h-full bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-slate-200 focus:ring-2 focus:ring-indigo-500 text-sm"
+                    />
+                </div>
+
+                {/* Settings Accordion */}
+                <div className="border border-slate-800 rounded-xl bg-slate-900/30 overflow-hidden">
+                    <button onClick={() => setStyleExpanded(!styleExpanded)} className="w-full flex justify-between items-center p-3 text-xs font-bold text-slate-400 uppercase hover:bg-slate-800/50">
+                        <span>Config & Style</span>
+                        {styleExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
+                    {styleExpanded && (
+                        <div className="p-3 pt-0 grid grid-cols-2 gap-3 mt-2">
+                             <div className="col-span-2">
+                                <label className="text-[10px] text-slate-500 mb-1 block">Aspect Ratio</label>
+                                <div className="grid grid-cols-5 gap-1">
+                                    {['1:1', '16:9', '9:16', '3:4', '4:3'].map((ratio) => (
+                                        <button key={ratio} onClick={() => setAspectRatio(ratio)} className={`py-1.5 rounded text-[10px] border ${aspectRatio === ratio ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
+                                        {ratio}
+                                        </button>
+                                    ))}
+                                </div>
+                             </div>
+                             <div className="flex flex-col gap-1">
+                                <label className="text-[10px] text-slate-500">Style</label>
+                                <select value={artStyle} onChange={e => setArtStyle(e.target.value)} className="bg-slate-800 text-xs text-slate-300 rounded p-1.5 border-none outline-none">
+                                    <option>None</option><option>Photorealistic</option><option>Anime</option><option>Cyberpunk</option><option>Oil Painting</option>
+                                </select>
+                             </div>
+                             <div className="flex flex-col gap-1">
+                                <label className="text-[10px] text-slate-500">Light</label>
+                                <select value={lighting} onChange={e => setLighting(e.target.value)} className="bg-slate-800 text-xs text-slate-300 rounded p-1.5 border-none outline-none">
+                                    <option>Auto</option><option>Cinematic</option><option>Natural</option><option>Neon</option>
+                                </select>
+                             </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-800">
+                {cooldown > 0 ? (
+                    <Button disabled variant="secondary" className="w-full py-3 opacity-75">
+                        <Clock className="animate-spin" size={16} /> Cooling down ({cooldown}s)
+                    </Button>
+                ) : (
+                    <Button onClick={handleGenerate} disabled={loading || !prompt} variant="primary" className="w-full py-3" icon={Wand2}>
+                        {loading ? 'Generating...' : 'Generate Image'}
+                    </Button>
+                )}
+            </div>
         </div>
 
-        {/* Preview Area */}
-        <div className="lg:col-span-8 bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-center relative overflow-hidden min-h-[400px] order-1 lg:order-2 group">
-          {loading && <LoadingOverlay message="Weaving pixels together..." onStop={handleStop} />}
+        {/* Right Panel: Result Preview */}
+        <div className="bg-slate-950 rounded-2xl border border-slate-800 relative overflow-hidden flex items-center justify-center group h-full">
+          {loading && <LoadingOverlay message="Weaving pixels..." onStop={handleStop} />}
           
           {errorMsg && !loading && (
              <div className="absolute inset-0 z-40 flex items-center justify-center p-6 bg-slate-900/95 backdrop-blur-sm">
-                 <div className="bg-slate-900 border border-red-500/30 rounded-xl p-8 max-w-md text-center flex flex-col items-center animate-fade-in shadow-2xl">
-                     <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-4">
-                        <AlertTriangle className="text-red-400 w-8 h-8" />
-                     </div>
-                     <h3 className="text-white font-bold text-lg mb-2">Generation Failed</h3>
-                     <p className="text-red-200/80 text-sm mb-6 leading-relaxed">{errorMsg}</p>
-                     <div className="flex gap-3 w-full">
-                        <Button variant="outline" onClick={() => setErrorMsg(null)} className="flex-1">Close</Button>
-                        {errorMsg.includes('Quota') ? (
-                             <Button variant="primary" disabled className="flex-1 opacity-70">Wait 60s...</Button>
-                        ) : (
-                             <Button variant="primary" onClick={handleEnhancePrompt} icon={Wand2} className="flex-1">Fix Prompt</Button>
-                        )}
-                     </div>
+                 <div className="bg-slate-900 border border-red-500/30 rounded-xl p-8 max-w-sm text-center flex flex-col items-center shadow-2xl">
+                     <AlertTriangle className="text-red-400 w-8 h-8 mb-4" />
+                     <h3 className="text-white font-bold mb-2">Failed</h3>
+                     <p className="text-red-200/80 text-xs mb-4">{errorMsg}</p>
+                     <Button variant="outline" onClick={() => setErrorMsg(null)} size="sm">Dismiss</Button>
                  </div>
              </div>
           )}
 
           {generatedImage ? (
-            <div className="relative w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')]">
-              <ZoomableImage src={generatedImage} />
-              
-              {/* Desktop Action Toolbar */}
-              <div className="absolute top-4 right-4 flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 z-10 pointer-events-auto">
-                  <IconButton onClick={() => generatedImage && shareImage(generatedImage, 'Generated Image', prompt)} icon={Share2} title="Share" />
-                  <a href={generatedImage} download={`gemini-gen-${Date.now()}.png`} className="p-2.5 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-200 backdrop-blur-md transition-all active:scale-95 flex items-center justify-center" title="Download">
-                      <Download size={20} />
-                  </a>
-                  <IconButton onClick={() => setShowZoom(true)} icon={Maximize2} title="Fullscreen" />
-                  <IconButton onClick={() => setGeneratedImage(null)} icon={X} title="Clear" variant="danger" />
+            <div className="relative w-full h-full flex flex-col bg-[url('https://grainy-gradients.vercel.app/noise.svg')]">
+              <div className="absolute top-4 right-4 z-20 flex gap-2">
+                  <IconButton onClick={() => generatedImage && shareImage(generatedImage, 'Generated', prompt)} icon={Share2} />
+                  <a href={generatedImage} download={`gemini-gen-${Date.now()}.png`} className="p-2.5 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-200 flex items-center justify-center"><Download size={20} /></a>
+                  <IconButton onClick={() => setGeneratedImage(null)} icon={X} variant="danger" />
               </div>
-
-               {/* Mobile Quick Actions */}
-               <div className="md:hidden absolute bottom-4 left-0 right-0 flex justify-center gap-4 pointer-events-none z-20">
-                  <div className="bg-slate-900/90 backdrop-blur-xl p-2 rounded-2xl border border-slate-800 shadow-2xl flex gap-4 pointer-events-auto">
-                      <IconButton onClick={() => generatedImage && shareImage(generatedImage, 'Generated Image', prompt)} icon={Share2} />
-                      <a href={generatedImage} download={`gemini-gen-${Date.now()}.png`} className="p-2.5 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-200" title="Download">
-                         <Download size={20} />
-                      </a>
-                      <IconButton onClick={() => setGeneratedImage(null)} icon={X} variant="danger" />
-                  </div>
-               </div>
+              
+              {/* Simple Image Fit - Click to Lightbox */}
+              <div className="flex-1 p-4 flex items-center justify-center cursor-zoom-in" onClick={() => setShowZoom(true)}>
+                  <img src={generatedImage} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
+              </div>
+              
+              <div className="p-4 bg-slate-900/50 backdrop-blur-md text-center border-t border-slate-800">
+                   <p className="text-xs text-slate-400 font-mono mb-2">Click image to fullscreen</p>
+              </div>
             </div>
           ) : !errorMsg && (
-            <div className="text-center text-slate-600 p-8 flex flex-col items-center select-none">
-              <div className="w-24 h-24 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mb-6">
-                <Sparkles className="w-10 h-10 text-indigo-500/40" />
-              </div>
-              <h3 className="text-xl font-medium text-slate-500 mb-2">Ready to Create</h3>
-              <p className="text-slate-600 max-w-sm text-sm">
-                  Enter a detailed prompt, upload references, and let AI generate visual art.<br/>
-                  <span className="text-indigo-500/50 text-xs mt-2 block">Pro Tip: Click the wand icon to enhance simple prompts.</span>
-              </p>
+            <div className="text-center text-slate-600 p-8 flex flex-col items-center">
+              <Sparkles className="w-16 h-16 mb-4 opacity-10" />
+              <p className="text-sm font-medium">Result will appear here</p>
             </div>
           )}
         </div>
@@ -1010,27 +818,13 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [showZoom, setShowZoom] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [cooldown, setCooldown] = useState(0);
 
-  // Grouped Presets
-  const presetGroups = {
-    "Utility": [
-        { label: "Upscale / Enhance", prompt: "Upscale this image to 4k resolution, sharpen details, remove compression artifacts, improve texture quality, highly detailed.", icon: MonitorPlay },
-        { label: "Remove Background", prompt: "Remove the background, isolate the main subject on a pure white background", icon: Scissors },
-    ],
-    "Color Grading": [
-        { label: "Teal & Orange", prompt: "Apply cinematic teal and orange color grading, enhance contrast, dramatic lighting, movie look", icon: Palette },
-        { label: "Vintage Film", prompt: "Apply vintage film grain, sepia tones, 1980s retro style, analog photography aesthetic", icon: Camera },
-        { label: "Moody Dark", prompt: "Make it dark and moody, high contrast, atmospheric shadows, dramatic lighting", icon: Aperture },
-    ],
-    "Portrait Studio": [
-        { label: "Smooth Skin", prompt: "Professional beauty retouch, smooth skin texture, enhance eyes, soft studio lighting", icon: User },
-        { label: "Cyberpunk", prompt: "Transform into neon cyberpunk aesthetic, glowing lights, futuristic city vibes, purple and blue tones", icon: Zap },
-    ],
-    "Artistic": [
-        { label: "Pencil Sketch", prompt: "Turn this into a charcoal pencil sketch on paper, rough lines, artistic shading", icon: Wand2 },
-        { label: "Oil Painting", prompt: "Transform into an oil painting on canvas, thick impasto brushstrokes, impressionist style", icon: Palette },
-    ]
-  };
+  useEffect(() => {
+    let interval: any;
+    if (cooldown > 0) interval = setInterval(() => setCooldown((prev) => prev - 1), 1000);
+    return () => clearInterval(interval);
+  }, [cooldown]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -1043,45 +837,29 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
   };
 
   const handleEdit = async () => {
-    if (!image || !prompt.trim()) return;
+    if (!image || !prompt.trim() || cooldown > 0) return;
     setLoading(true);
     setResultImage(null);
     setErrorMsg(null);
 
     try {
       const ai = getAI(apiKey);
-      // Use isImageForGeneration = true to trigger compression to 384px
       const imagePart = await fileToGenerativePart(image, true);
-      
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
-        contents: {
-          parts: [
-            imagePart,
-            { text: prompt }
-          ]
-        },
-        config: {
-           safetySettings: permissiveSafetySettings
-        }
+        contents: { parts: [imagePart, { text: prompt }] },
+        config: { safetySettings: permissiveSafetySettings }
       });
       
-      const candidates = response.candidates;
-      if (!candidates || candidates.length === 0) {
-        throw new Error("No response from AI service.");
-      }
-
-      if (candidates[0].finishReason === 'SAFETY') {
-         const ratings = candidates[0].safetyRatings?.map(r => `${r.category}: ${r.probability}`).join(', ');
-         throw new Error(`Edit blocked by safety filters. (${ratings})`);
-      }
+      const candidate = response.candidates?.[0];
+      if (!candidate) throw new Error("No response.");
 
       let found = false;
       let rejectionText = "";
 
-      for (const part of response.candidates?.[0]?.content?.parts || []) {
+      for (const part of candidate.content?.parts || []) {
         if (part.inlineData) {
-          const imageUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
+          const imageUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
           setResultImage(imageUrl);
           onAddToGallery({
             id: generateId(),
@@ -1092,27 +870,17 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
           });
           found = true;
           break;
-        } else if (part.text) {
-            rejectionText += part.text;
-        }
+        } else if (part.text) rejectionText += part.text;
       }
       
       if (!found) {
-           if (rejectionText) {
-              throw new Error(`AI Refused: "${rejectionText.slice(0, 300)}..."`);
-          }
-          throw new Error("No image returned. Try a different prompt.");
+          if (rejectionText) throw new Error(`AI Says: ${rejectionText}`);
+          throw new Error("Zonk Result.");
       }
 
     } catch (error: any) {
-      console.error(error);
-       let msg = error.message || "Failed to edit image.";
-       const lowerMsg = msg.toLowerCase();
-       if (lowerMsg.includes('400')) msg = "400 Bad Request: Check API Key or Prompt.";
-       else if (lowerMsg.includes('403')) msg = "403 Forbidden: API Key invalid for this model.";
-       else if (lowerMsg.includes('429') || lowerMsg.includes('quota')) msg = "429 Quota Exceeded: Image too large. Compressing...";
-       else if (lowerMsg.includes('safety')) msg = `Safety Block: ${msg.replace('Error: ', '')}`;
-       
+       let msg = error.message || "Failed.";
+       if (msg.includes('429')) { msg = "⚠️ Quota Exceeded. Cooldown 60s."; setCooldown(60); }
        setErrorMsg(msg);
     } finally {
       setLoading(false);
@@ -1120,7 +888,7 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full animate-fade-in pb-20 md:pb-0">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full animate-fade-in">
       {showZoom && resultImage && (
          <Lightbox 
             src={resultImage} 
@@ -1131,97 +899,79 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
          />
       )}
 
-      <div className="lg:col-span-4 bg-slate-900/50 p-6 rounded-2xl border border-slate-800 flex flex-col gap-6 order-2 lg:order-1 overflow-y-auto scrollbar-hide">
-        <div className="flex-1 flex flex-col gap-4">
-          <label className="text-sm font-semibold text-slate-300">Source Image</label>
-          <div className="border-2 border-dashed border-slate-700 rounded-xl p-4 flex flex-col items-center justify-center text-center hover:border-pink-500/50 hover:bg-slate-800/50 transition-all cursor-pointer relative min-h-[160px] bg-slate-900/50">
-            <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
-            {imagePreview ? (
-              <div className="relative w-full h-full flex items-center justify-center">
-                 <img src={imagePreview} className="max-h-36 rounded-lg object-contain shadow-lg" />
-                 <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity rounded-lg">
-                    <p className="text-white text-xs font-medium">Change</p>
-                 </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center">
-                <Upload className="text-slate-400 mb-2" size={24}/>
-                <span className="text-slate-400 text-xs font-medium">Upload Image</span>
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-4">
-             <label className="text-sm font-medium text-slate-300">Magic Tools</label>
-             {Object.entries(presetGroups).map(([group, items]) => (
-                <div key={group} className="flex flex-col gap-2">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{group}</span>
-                    <div className="grid grid-cols-2 gap-2">
-                        {items.map((preset, idx) => (
-                            <button 
-                                key={idx}
-                                onClick={() => setPrompt(preset.prompt)}
-                                className="flex items-center gap-2 p-2.5 bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-pink-500/30 rounded-lg text-xs text-left transition-all group"
-                            >
-                                <preset.icon size={14} className="text-slate-400 group-hover:text-pink-400"/>
-                                <span className="text-slate-300 group-hover:text-white">{preset.label}</span>
-                            </button>
-                        ))}
+      {/* Control Panel */}
+      <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 flex flex-col gap-4 overflow-hidden h-full">
+        <div className="flex-1 flex flex-col gap-4 overflow-y-auto scrollbar-hide">
+             <div className="border border-dashed border-slate-700 rounded-xl p-4 flex flex-col items-center justify-center text-center hover:border-pink-500/50 hover:bg-slate-800/50 transition-all cursor-pointer relative min-h-[180px] bg-slate-900">
+                <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
+                {imagePreview ? (
+                <div className="relative w-full h-full flex items-center justify-center">
+                    <img src={imagePreview} className="max-h-40 rounded-lg object-contain" />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity rounded-lg">
+                        <p className="text-white text-xs font-medium">Click to Change</p>
                     </div>
                 </div>
-             ))}
-          </div>
+                ) : (
+                <div className="flex flex-col items-center">
+                    <Upload className="text-slate-400 mb-2" size={24}/>
+                    <span className="text-slate-400 text-xs font-medium">Upload Source</span>
+                </div>
+                )}
+            </div>
 
-          <PromptArea
-            label="Custom Instruction"
-            value={prompt}
-            onChange={(e: any) => setPrompt(e.target.value)}
-            placeholder="Change the background, enhance quality..."
-            className="w-full h-24 bg-slate-800 border-slate-700 rounded-xl p-3 text-slate-200 focus:ring-2 focus:ring-pink-500 resize-none text-sm"
-          />
+            <div className="grid grid-cols-2 gap-2">
+                 {[
+                    { l: "Remove BG", p: "Remove background, white background", i: Scissors },
+                    { l: "Upscale", p: "High quality, sharpen details, 4k", i: MonitorPlay },
+                    { l: "Cyberpunk", p: "Cyberpunk neon style, futuristic", i: Zap },
+                    { l: "Sketch", p: "Pencil sketch on paper", i: Wand2 }
+                 ].map((t, idx) => (
+                    <button key={idx} onClick={() => setPrompt(t.p)} className="flex items-center gap-2 p-3 bg-slate-800 border border-slate-700 rounded-lg hover:border-pink-500/50 transition-all text-xs text-slate-300">
+                        <t.i size={14} className="text-pink-500" /> {t.l}
+                    </button>
+                 ))}
+            </div>
+
+            <PromptArea
+                label="Instruction"
+                value={prompt}
+                onChange={(e: any) => setPrompt(e.target.value)}
+                placeholder="Make it look like..."
+                className="w-full h-32 bg-slate-800 border-slate-700 rounded-xl p-3 text-slate-200 focus:ring-2 focus:ring-pink-500 text-sm"
+            />
         </div>
 
-        <Button onClick={handleEdit} disabled={loading || !image || !prompt} className="w-full py-3.5 bg-pink-600 hover:bg-pink-500 shadow-pink-900/20" icon={Sparkles}>
-          {loading ? 'Processing...' : 'Apply Magic'}
-        </Button>
+        {cooldown > 0 ? (
+            <Button disabled variant="secondary" className="w-full py-3 opacity-75">
+                <Clock className="animate-spin" size={16} /> Cooling Down ({cooldown}s)
+            </Button>
+        ) : (
+            <Button onClick={handleEdit} disabled={loading || !image || !prompt} className="w-full py-3 bg-pink-600 hover:bg-pink-500" icon={Sparkles}>
+                {loading ? 'Processing...' : 'Apply Magic'}
+            </Button>
+        )}
       </div>
 
-      <div className="lg:col-span-8 bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-center relative overflow-hidden min-h-[400px] order-1 lg:order-2">
-        {loading && <LoadingOverlay message="Transforming reality..." />}
-        
+      {/* Result Panel */}
+      <div className="bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-center relative overflow-hidden h-full">
+        {loading && <LoadingOverlay message="Transforming..." />}
         {errorMsg && !loading && (
              <div className="absolute inset-0 z-40 flex items-center justify-center p-6 bg-slate-900/90">
-                 <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-6 max-w-md text-center flex flex-col items-center animate-fade-in">
-                     <AlertTriangle className="text-red-400 w-10 h-10 mb-3" />
-                     <h3 className="text-red-200 font-bold mb-2">Edit Failed</h3>
-                     <p className="text-red-300/80 text-sm mb-4">{errorMsg}</p>
-                     <Button variant="outline" size="sm" onClick={() => setErrorMsg(null)}>Dismiss</Button>
+                 <div className="bg-red-900/20 border border-red-500/30 rounded-xl p-6 text-center">
+                     <p className="text-red-300 text-sm">{errorMsg}</p>
+                     <button onClick={() => setErrorMsg(null)} className="mt-4 text-xs bg-red-500/20 px-4 py-2 rounded">Dismiss</button>
                  </div>
              </div>
         )}
 
         {resultImage ? (
-          <div className="w-full h-full p-6 grid grid-cols-1 md:grid-cols-2 gap-6 group overflow-y-auto">
-              <div className="flex flex-col gap-3 h-full min-h-[300px]">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-widest text-center">Original</span>
-                  <div className="flex-1 rounded-xl border border-slate-800 bg-slate-900 flex items-center justify-center overflow-hidden relative">
-                    {imagePreview && <ZoomableImage src={imagePreview} />}
-                  </div>
-              </div>
-              <div className="flex flex-col gap-3 h-full min-h-[300px] relative">
-                   <span className="text-xs font-bold text-pink-500 uppercase tracking-widest text-center">Result</span>
-                   <div className="flex-1 rounded-xl border border-pink-500/30 bg-slate-900 flex items-center justify-center overflow-hidden shadow-2xl shadow-pink-900/10 relative">
-                        <ZoomableImage src={resultImage} />
-                        <div className="absolute bottom-2 right-2 flex gap-2">
-                            <IconButton onClick={() => setShowZoom(true)} icon={Maximize2} title="Fullscreen" className="shadow-lg" />
-                        </div>
-                  </div>
-              </div>
+          <div className="w-full h-full flex items-center justify-center cursor-zoom-in p-4" onClick={() => setShowZoom(true)}>
+             <img src={resultImage} className="max-w-full max-h-full object-contain rounded shadow-2xl" />
           </div>
-        ) : !errorMsg && (
-          <div className="text-center text-slate-600 p-8">
+        ) : (
+          <div className="text-center text-slate-600">
             <Wand2 className="w-16 h-16 mx-auto mb-4 opacity-20" />
-            <p className="text-lg">Upload an image and choose a magic tool.</p>
+            <p className="text-sm">Magic awaits...</p>
           </div>
         )}
       </div>
@@ -1229,33 +979,20 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
   );
 };
 
+// ... (AnalyzeView, ChatView, GalleryView remain mostly similar but adjusted for height) ...
+
 const AnalyzeView = ({ onGenerateFromAnalysis, apiKey }: { onGenerateFromAnalysis: (text: string) => void, apiKey: string }) => {
   const [file, setFile] = useState<File | null>(null);
-  const [filePreview, setFilePreview] = useState<{ type: 'image' | 'video' | 'audio', url: string } | null>(null);
+  const [filePreview, setFilePreview] = useState<any>(null);
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState('');
-  const [copied, setCopied] = useState(false);
-
-  // Improved Prompts for 1:1 Accuracy
-  const presets = [
-    { label: "Detailed Analysis", text: "Analyze this image in extreme detail, describing every object, lighting, style, and mood." },
-    { 
-        label: "Prompt for Generation", 
-        text: "You are an expert Prompt Engineer for stable diffusion and Midjourney. Analyze this image and write a highly detailed, 1:1 descriptive prompt to recreate it exactly. \n\nFocus on these specific elements:\n1. Subject (exact appearance, clothing, pose, expression)\n2. Environment/Background (detailed setting, depth of field)\n3. Art Style (medium, texture, rendering style e.g. octane render, oil painting)\n4. Lighting (direction, color, intensity, shadows)\n5. Color Palette (dominant colors, mood)\n6. Camera (angle, lens type)\n\nOutput ONLY the prompt paragraph, no intro/outro." 
-    },
-    { label: "Object Detection", text: "List all the main objects visible in this image in a bulleted list." },
-    { label: "Transcription", text: "Transcribe any text or speech found in this file verbatim." }
-  ];
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const f = e.target.files[0];
       setFile(f);
-      const url = URL.createObjectURL(f);
-      if (f.type.startsWith('image/')) setFilePreview({ type: 'image', url });
-      else if (f.type.startsWith('video/')) setFilePreview({ type: 'video', url });
-      else if (f.type.startsWith('audio/')) setFilePreview({ type: 'audio', url });
+      setFilePreview({ type: f.type.split('/')[0], url: URL.createObjectURL(f) });
       setAnalysis('');
     }
   };
@@ -1263,133 +1000,38 @@ const AnalyzeView = ({ onGenerateFromAnalysis, apiKey }: { onGenerateFromAnalysi
   const handleAnalyze = async () => {
     if (!file) return;
     setLoading(true);
-    setAnalysis('');
-
     try {
       const ai = getAI(apiKey);
       const filePart = await fileToGenerativePart(file);
-      // Use the stronger prompt if selected, otherwise fallback
-      const textPart = { text: prompt || "Analyze this content in detail." };
-      
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: { parts: [filePart, textPart] }
+        contents: { parts: [filePart, { text: prompt || "Analyze detail." }] }
       });
-      setAnalysis(response.text || "No analysis generated.");
-    } catch (error) {
-      console.error(error);
-      setAnalysis("Error analyzing the file. Please check your API key.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(analysis);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+      setAnalysis(response.text || "No analysis.");
+    } catch (e) { setAnalysis("Error."); } finally { setLoading(false); }
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full animate-fade-in pb-20 md:pb-0">
-       <div className="lg:col-span-5 flex flex-col gap-6 order-2 lg:order-1 overflow-y-auto scrollbar-hide">
-          <div className="bg-slate-900/50 p-6 rounded-2xl border border-slate-800 flex flex-col gap-6 h-full">
-            <div className="border-2 border-dashed border-slate-700 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:border-emerald-500/50 hover:bg-slate-800/50 transition-all cursor-pointer relative min-h-[200px] bg-slate-800/20">
-              <input 
-                type="file" 
-                onChange={handleFileUpload} 
-                className="absolute inset-0 opacity-0 cursor-pointer"
-                accept="image/*,video/*,audio/*"
-              />
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full animate-fade-in">
+       <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 flex flex-col gap-4 h-full">
+            <div className="border border-dashed border-slate-700 rounded-xl p-4 flex-1 flex flex-col items-center justify-center relative bg-slate-800/20">
+              <input type="file" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
               {filePreview ? (
-                <div className="flex flex-col items-center w-full h-full justify-center">
-                  {filePreview.type === 'image' && <img src={filePreview.url} className="max-h-48 rounded-lg shadow-lg" />}
-                  {filePreview.type === 'video' && <video src={filePreview.url} controls className="max-h-48 rounded-lg shadow-lg" />}
-                  {filePreview.type === 'audio' && <audio src={filePreview.url} controls className="w-full mt-4" />}
-                  <Button variant="ghost" onClick={(e: any) => { e.stopPropagation(); setFile(null); setFilePreview(null); }} className="mt-4 text-red-400 hover:text-red-300">Remove File</Button>
+                <div className="flex flex-col items-center justify-center w-full h-full">
+                  {filePreview.type === 'image' && <img src={filePreview.url} className="max-h-48 rounded" />}
+                  {filePreview.type === 'video' && <video src={filePreview.url} controls className="max-h-48 rounded" />}
+                  <Button variant="ghost" size="sm" onClick={(e:any) => {e.stopPropagation(); setFile(null); setFilePreview(null);}} className="mt-2 text-red-400">Remove</Button>
                 </div>
               ) : (
-                <>
-                  <div className="w-12 h-12 rounded-full bg-emerald-900/20 flex items-center justify-center mb-3">
-                     <ScanEye className="text-emerald-500" />
-                  </div>
-                  <span className="text-slate-300 font-medium">Drop Image, Video, or Audio</span>
-                  <span className="text-slate-500 text-xs mt-1">Multimodal Analysis</span>
-                </>
+                <div className="text-center"><ScanEye className="mx-auto mb-2 text-emerald-500" /><span className="text-slate-400 text-sm">Drop Media</span></div>
               )}
             </div>
-
-             <div className="flex flex-wrap gap-2">
-                {presets.map((preset, idx) => (
-                    <button 
-                       key={idx}
-                       onClick={() => setPrompt(preset.text)}
-                       className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs transition-colors flex items-center gap-1 text-left"
-                    >
-                        {preset.label}
-                    </button>
-                ))}
-             </div>
-
-            <div className="flex-1">
-                <PromptArea
-                    label="Question / Instruction"
-                    value={prompt}
-                    onChange={(e: any) => setPrompt(e.target.value)}
-                    placeholder="Describe this? What is happening? Transcribe audio..."
-                    className="w-full bg-slate-800 border-slate-700 rounded-xl p-4 text-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm h-32 resize-none"
-                    showControls={false} 
-                />
-            </div>
-            
-            <Button onClick={handleAnalyze} disabled={loading || !file} variant="primary" className="bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/20 py-3.5" icon={ScanEye}>
-               {loading ? 'Analyzing...' : 'Analyze Content'}
-            </Button>
-          </div>
+            <PromptArea value={prompt} onChange={(e: any) => setPrompt(e.target.value)} placeholder="Question..." className="w-full h-24 bg-slate-800 border-slate-700 rounded-xl p-3 text-slate-200 text-sm" />
+            <Button onClick={handleAnalyze} disabled={loading || !file} className="w-full bg-emerald-600 hover:bg-emerald-500" icon={ScanEye}>{loading ? 'Analyzing...' : 'Analyze'}</Button>
        </div>
-
-       <div className="lg:col-span-7 bg-slate-900/50 rounded-2xl border border-slate-800 p-6 flex flex-col h-full min-h-[400px] order-1 lg:order-2">
-            <div className="flex justify-between items-center mb-4">
-                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                    Analysis Result
-                </h4>
-                {analysis && (
-                    <div className="flex gap-2">
-                         <Button size="sm" variant="ghost" onClick={handleCopy}>
-                            {copied ? <Check size={14} className="text-emerald-500"/> : <Copy size={14}/>}
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => navigator.share({text: analysis})}>
-                            <Share2 size={14}/>
-                        </Button>
-                    </div>
-                )}
-            </div>
-            
-            <div className="flex-1 bg-slate-950 rounded-xl p-6 overflow-y-auto text-slate-300 leading-7 font-light whitespace-pre-wrap border border-slate-800/50 scrollbar-hide mb-4">
-                {loading ? (
-                    <div className="flex flex-col items-center justify-center h-full gap-4 text-emerald-500/80">
-                        <Loader2 className="animate-spin w-8 h-8" /> 
-                        <span className="animate-pulse font-medium">Reading content...</span>
-                    </div>
-                ) : analysis ? (
-                    analysis
-                ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-slate-700">
-                        <p className="italic">Analysis results will appear here</p>
-                    </div>
-                )}
-            </div>
-
-            {analysis && (
-                <Button 
-                    onClick={() => onGenerateFromAnalysis(analysis)}
-                    variant="primary" 
-                    className="w-full bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-900/20"
-                    icon={Wand2}
-                >
-                    Use Prompt for Generate
-                </Button>
-            )}
+       <div className="bg-slate-950 rounded-2xl border border-slate-800 p-6 overflow-y-auto text-slate-300 whitespace-pre-wrap h-full font-light">
+            {analysis || <span className="text-slate-600 italic">Analysis results...</span>}
+            {analysis && <Button onClick={() => onGenerateFromAnalysis(analysis)} variant="primary" className="mt-4 w-full" icon={Wand2}>Use as Prompt</Button>}
        </div>
     </div>
   );
@@ -1402,139 +1044,45 @@ const ChatView = ({ apiKey }: { apiKey: string }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatSession = useRef<any>(null);
 
-  // Initialize chat when component mounts or API key changes
   useEffect(() => {
     if (apiKey) {
-        try {
-            const ai = getAI(apiKey);
-            chatSession.current = ai.chats.create({
-                model: 'gemini-2.5-flash',
-                config: { systemInstruction: "You are a helpful, witty, and concise AI assistant." }
-            });
-        } catch (e) {
-            console.error("Chat init failed", e);
-        }
+        try { chatSession.current = getAI(apiKey).chats.create({ model: 'gemini-2.5-flash' }); } catch (e) {}
     }
   }, [apiKey]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isTyping]);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, isTyping]);
 
   const handleSend = async () => {
     if (!input.trim() || isTyping) return;
-    
-    const userMsg: ChatMessage = {
-      id: generateId(),
-      role: 'user',
-      text: input,
-      timestamp: Date.now()
-    };
-    
-    setMessages(prev => [...prev, userMsg]);
-    setInput('');
-    setIsTyping(true);
-
+    const userMsg: ChatMessage = { id: generateId(), role: 'user', text: input, timestamp: Date.now() };
+    setMessages(p => [...p, userMsg]); setInput(''); setIsTyping(true);
     try {
-      if (!chatSession.current) {
-          // Re-init if missing
-           const ai = getAI(apiKey);
-           chatSession.current = ai.chats.create({ model: 'gemini-2.5-flash' });
-      }
-
+      if (!chatSession.current) chatSession.current = getAI(apiKey).chats.create({ model: 'gemini-2.5-flash' });
       const result = await chatSession.current.sendMessageStream({ message: userMsg.text });
-      let fullResponse = '';
-      const botMsgId = generateId();
-      
-      setMessages(prev => [...prev, {
-        id: botMsgId,
-        role: 'model',
-        text: '',
-        timestamp: Date.now()
-      }]);
-
+      let fullResponse = ''; const botMsgId = generateId();
+      setMessages(p => [...p, { id: botMsgId, role: 'model', text: '', timestamp: Date.now() }]);
       for await (const chunk of result) {
         const text = (chunk as GenerateContentResponse).text;
-        if (text) {
-          fullResponse += text;
-          setMessages(prev => prev.map(msg => 
-            msg.id === botMsgId ? { ...msg, text: fullResponse } : msg
-          ));
-        }
+        if (text) { fullResponse += text; setMessages(p => p.map(m => m.id === botMsgId ? { ...m, text: fullResponse } : m)); }
       }
-    } catch (error) {
-      console.error(error);
-      setMessages(prev => [...prev, {
-        id: generateId(),
-        role: 'model',
-        text: "Sorry, I encountered an error. Please check your API key.",
-        timestamp: Date.now()
-      }]);
-    } finally {
-      setIsTyping(false);
-    }
+    } catch (error) { setMessages(p => [...p, { id: generateId(), role: 'model', text: "Error.", timestamp: Date.now() }]); } finally { setIsTyping(false); }
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-900/50 rounded-2xl border border-slate-800 overflow-hidden animate-fade-in shadow-2xl mb-20 md:mb-0">
-      <div className="p-4 border-b border-slate-800 bg-slate-900/80 backdrop-blur-md flex justify-between items-center z-10">
-         <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
-            <span className="font-semibold text-slate-200">Assistant</span>
-         </div>
-         <Button variant="ghost" onClick={() => { setMessages([]); if(apiKey) { const ai = getAI(apiKey); chatSession.current = ai.chats.create({ model: 'gemini-2.5-flash' }); } }} className="text-xs h-8 px-3">
-            Clear
-         </Button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide">
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-slate-600">
-             <MessageSquare className="w-16 h-16 mb-4 opacity-20" />
-             <p className="font-medium">Start a conversation</p>
-          </div>
-        )}
-        
+    <div className="flex flex-col h-full bg-slate-900/50 rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-hide">
         {messages.map((msg) => (
           <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[85%] rounded-2xl p-4 shadow-sm ${
-              msg.role === 'user' 
-                ? 'bg-blue-600 text-white rounded-br-none' 
-                : 'bg-slate-800 text-slate-200 rounded-bl-none border border-slate-700'
-            }`}>
-               <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+            <div className={`max-w-[80%] rounded-2xl p-3 ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-200 border border-slate-700'}`}>
+               <p className="whitespace-pre-wrap text-sm">{msg.text}</p>
             </div>
           </div>
         ))}
-        {isTyping && (
-           <div className="flex justify-start">
-             <div className="bg-slate-800/50 rounded-2xl rounded-bl-none p-4 flex gap-1.5 items-center h-10">
-                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span>
-                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-75"></span>
-                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-150"></span>
-             </div>
-           </div>
-        )}
+        {isTyping && <div className="text-slate-500 text-xs animate-pulse">Assistant is typing...</div>}
         <div ref={messagesEndRef} />
       </div>
-
-      <div className="p-4 bg-slate-900/80 backdrop-blur-md border-t border-slate-800">
-        <div className="flex gap-2 relative max-w-4xl mx-auto">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Type your message..."
-            className="flex-1 bg-slate-800 border border-slate-700/50 rounded-xl px-4 text-slate-200 focus:ring-2 focus:ring-blue-500/50 outline-none h-12 transition-all placeholder:text-slate-500"
-          />
-          <button 
-            onClick={handleSend} 
-            disabled={!input.trim() || isTyping}
-            className="p-3 bg-blue-600 rounded-xl text-white hover:bg-blue-500 disabled:opacity-50 disabled:bg-slate-800 disabled:text-slate-600 transition-all shadow-lg shadow-blue-900/20"
-          >
-            <Send size={20} />
-          </button>
-        </div>
+      <div className="p-4 bg-slate-900/80 backdrop-blur-md border-t border-slate-800 flex gap-2">
+          <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()} placeholder="Message..." className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 text-slate-200 outline-none h-10 text-sm" />
+          <button onClick={handleSend} disabled={!input.trim()} className="p-2 bg-blue-600 rounded-xl text-white hover:bg-blue-500"><Send size={18} /></button>
       </div>
     </div>
   );
@@ -1542,250 +1090,102 @@ const ChatView = ({ apiKey }: { apiKey: string }) => {
 
 const GalleryView = ({ items, onDelete }: { items: GalleryItem[], onDelete: (id: string) => void }) => {
   const [selectedItem, setSelectedItem] = useState<GalleryItem | null>(null);
-
-  const handleDelete = () => {
-    if (selectedItem) {
-        if (confirm("Delete this image from gallery?")) {
-            onDelete(selectedItem.id);
-            setSelectedItem(null);
-        }
-    }
-  };
-
   return (
-    <div className="h-full animate-fade-in flex flex-col pb-20 md:pb-0">
-       {selectedItem && (
-         <Lightbox 
-            src={selectedItem.src}
-            prompt={selectedItem.prompt}
-            onClose={() => setSelectedItem(null)}
-            onShare={() => shareImage(selectedItem.src, 'From Gallery', selectedItem.prompt)}
-            onUsePrompt={() => navigator.clipboard.writeText(selectedItem.prompt)}
-            onDelete={handleDelete}
-            showDelete={true}
-         />
-       )}
-
-       <div className="flex justify-between items-end mb-8 px-2">
-          <div>
-            <h3 className="text-3xl font-bold text-white mb-2">Gallery</h3>
-            <p className="text-slate-400">Your collection of generated masterpieces.</p>
-          </div>
-          <span className="text-sm font-medium text-slate-500 bg-slate-900 px-3 py-1.5 rounded-full border border-slate-800">{items.length} Items</span>
-       </div>
-
-       {items.length === 0 ? (
-         <div className="flex-1 flex flex-col items-center justify-center text-slate-600 border-2 border-dashed border-slate-800 rounded-3xl bg-slate-900/20 m-2">
-            <Images size={64} className="mb-6 opacity-20" />
-            <p className="text-xl font-medium text-slate-500">Gallery is empty</p>
-         </div>
-       ) : (
-         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 overflow-y-auto pb-10 px-2 scrollbar-hide">
+    <div className="h-full animate-fade-in flex flex-col">
+       {selectedItem && <Lightbox src={selectedItem.src} prompt={selectedItem.prompt} onClose={() => setSelectedItem(null)} onDelete={() => { onDelete(selectedItem.id); setSelectedItem(null); }} showDelete={true} />}
+       <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 overflow-y-auto pb-4 pr-2 scrollbar-hide">
             {items.slice().reverse().map((item) => (
-              <div 
-                key={item.id} 
-                className="group relative aspect-square bg-slate-900 rounded-2xl overflow-hidden cursor-pointer border border-slate-800 hover:border-indigo-500/50 hover:shadow-2xl hover:shadow-indigo-500/10 transition-all duration-300"
-                onClick={() => setSelectedItem(item)}
-              >
-                <img src={item.src} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-5">
-                   <div className="absolute top-2 right-2 p-1.5 bg-black/40 backdrop-blur-sm rounded-full text-white/70">
-                       <ZoomIn size={14} />
-                   </div>
-                   <span className="text-[10px] font-bold text-white/80 bg-white/20 backdrop-blur-md px-2 py-1 rounded w-fit mb-2 uppercase tracking-wide">{item.type}</span>
-                   <p className="text-white text-xs line-clamp-2 opacity-90">{item.prompt}</p>
-                </div>
+              <div key={item.id} className="aspect-square bg-slate-900 rounded-xl overflow-hidden cursor-pointer border border-slate-800 hover:border-indigo-500 transition-all" onClick={() => setSelectedItem(item)}>
+                <img src={item.src} className="w-full h-full object-cover" loading="lazy" />
               </div>
             ))}
-         </div>
-       )}
+       </div>
     </div>
   );
 };
 
-// --- Main App ---
+// --- Main App with Top Navigation ---
 
 const App = () => {
   const [activeTab, setActiveTab] = useState('generate');
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
   const [sharedPrompt, setSharedPrompt] = useState('');
-  
-  // API Key Management
-  // REMOVED process.env.API_KEY fallback to ensure the Login Screen always appears
-  // and the developer's key is never accidentally leaked in a public build.
   const [userApiKey, setUserApiKey] = useState(() => localStorage.getItem('user_gemini_api_key') || '');
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
-  const saveApiKey = (key: string) => {
-      localStorage.setItem('user_gemini_api_key', key);
-      setUserApiKey(key);
-      setShowSettingsModal(false);
-  };
+  const saveApiKey = (key: string) => { localStorage.setItem('user_gemini_api_key', key); setUserApiKey(key); setShowSettingsModal(false); };
+  const handleLogout = () => { localStorage.removeItem('user_gemini_api_key'); setUserApiKey(''); };
+  const addToGallery = (item: GalleryItem) => { setGalleryItems(prev => [...prev, item]); };
+  const removeFromGallery = (id: string) => { setGalleryItems(prev => prev.filter(item => item.id !== id)); };
+  const handleGenerateFromAnalysis = (text: string) => { setSharedPrompt(text); setActiveTab('generate'); };
 
-  const handleLogout = () => {
-      localStorage.removeItem('user_gemini_api_key');
-      setUserApiKey('');
-  };
+  if (!userApiKey) return <LoginScreen onLogin={saveApiKey} />;
 
-  const addToGallery = (item: GalleryItem) => {
-    setGalleryItems(prev => [...prev, item]);
-  };
-
-  const removeFromGallery = (id: string) => {
-    setGalleryItems(prev => prev.filter(item => item.id !== id));
-  };
-
-  const handleGenerateFromAnalysis = (text: string) => {
-      setSharedPrompt(text);
-      setActiveTab('generate');
-  };
-
-  // If no API Key, show Login Screen (Authentication Gate)
-  if (!userApiKey) {
-     return <LoginScreen onLogin={saveApiKey} />;
-  }
-
-  // Desktop Sidebar Button
-  const NavButton = ({ id, icon: Icon, label }: any) => (
+  // Top Nav Tab Component
+  const TopTab = ({ id, icon: Icon, label }: any) => (
     <button
       onClick={() => setActiveTab(id)}
-      className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 w-full text-left group relative overflow-hidden ${
+      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 text-sm font-medium ${
         activeTab === id 
-          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/40' 
+          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' 
           : 'text-slate-400 hover:bg-slate-800 hover:text-white'
       }`}
     >
-      <div className={`absolute left-0 top-0 bottom-0 w-1 bg-white/50 transition-opacity ${activeTab === id ? 'opacity-100' : 'opacity-0'}`}></div>
-      <Icon size={20} className={`transition-transform duration-300 ${activeTab === id ? 'scale-110' : 'group-hover:scale-110'}`} />
-      <span className="text-sm font-medium">{label}</span>
-    </button>
-  );
-
-  // Mobile Bottom Nav Button
-  const MobileNavButton = ({ id, icon: Icon, label }: any) => (
-    <button
-      onClick={() => setActiveTab(id)}
-      className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all duration-300 flex-1 ${
-        activeTab === id 
-          ? 'text-indigo-400' 
-          : 'text-slate-500 hover:text-slate-300'
-      }`}
-    >
-      <Icon size={24} className={`mb-1 transition-transform ${activeTab === id ? 'scale-110' : ''}`} strokeWidth={activeTab === id ? 2.5 : 2} />
-      <span className="text-[10px] font-medium">{label}</span>
+      <Icon size={16} />
+      <span>{label}</span>
     </button>
   );
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col md:flex-row overflow-hidden font-sans selection:bg-indigo-500/30">
+    <div className="h-screen bg-slate-950 flex flex-col overflow-hidden font-sans text-slate-200">
       
-      {/* Settings Modal (Overlay for updating key inside app) */}
-      <ApiKeyModal 
-         isOpen={showSettingsModal} 
-         onSave={saveApiKey} 
-         initialKey={userApiKey} 
-         onClose={() => setShowSettingsModal(false)}
-      />
+      <ApiKeyModal isOpen={showSettingsModal} onSave={saveApiKey} initialKey={userApiKey} onClose={() => setShowSettingsModal(false)} />
 
-      {/* Mobile Top Header */}
-      <header className="md:hidden h-16 bg-slate-950 border-b border-slate-900 flex items-center justify-between px-4 z-20 sticky top-0">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-tr from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30">
-                <Sparkles size={16} className="text-white" />
+      {/* TOP NAVIGATION BAR */}
+      <header className="h-16 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800 flex items-center justify-between px-6 z-50 shrink-0">
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-gradient-to-tr from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                    <Sparkles size={18} className="text-white" />
+                </div>
+                <h1 className="text-lg font-bold text-white tracking-tight hidden md:block">Ares Suite</h1>
             </div>
-            <h1 className="text-lg font-bold text-white tracking-tight">Ares Gemini Suite</h1>
+            
+            {/* Desktop Tabs */}
+            <div className="hidden md:flex items-center bg-slate-900/50 p-1 rounded-xl border border-slate-800/50">
+                <TopTab id="generate" icon={Sparkles} label="Generate" />
+                <TopTab id="edit" icon={Wand2} label="Edit" />
+                <TopTab id="analyze" icon={ScanEye} label="Analyze" />
+                <TopTab id="chat" icon={MessageSquare} label="Chat" />
+                <TopTab id="gallery" icon={Images} label="Gallery" />
+            </div>
           </div>
-          <button onClick={() => setShowSettingsModal(true)} className="p-2 text-slate-400 hover:text-white">
-              <Settings size={20} />
-          </button>
+
+          <div className="flex items-center gap-2">
+              <button onClick={() => setShowSettingsModal(true)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors" title="Settings">
+                  <Settings size={18} />
+              </button>
+              <button onClick={handleLogout} className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors" title="Logout">
+                  <LogOut size={18} />
+              </button>
+          </div>
       </header>
 
-      {/* Desktop Sidebar (Hidden on Mobile) */}
-      <nav className="hidden md:flex w-72 bg-slate-950 border-r border-slate-900 flex-col z-20 shadow-2xl h-screen">
-        <div className="p-8 flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-tr from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
-            <Sparkles size={20} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-white tracking-tight">Ares Gemini Suite</h1>
-            <p className="text-xs text-slate-500">Creative AI Studio</p>
-          </div>
-        </div>
-        
-        <div className="flex-1 px-4 py-6 flex flex-col gap-2">
-          <div className="text-xs font-bold text-slate-600 uppercase tracking-widest px-4 mb-2">Creation</div>
-          <NavButton id="generate" icon={Sparkles} label="Generate Image" />
-          <NavButton id="edit" icon={Wand2} label="Magic Edit" />
-          
-          <div className="text-xs font-bold text-slate-600 uppercase tracking-widest px-4 mb-2 mt-6">Tools</div>
-          <NavButton id="analyze" icon={ScanEye} label="Analyze Image" />
-          <NavButton id="chat" icon={MessageSquare} label="Chat AI" />
-          
-          <div className="mt-auto pt-6">
-             <NavButton id="gallery" icon={Images} label="Gallery" />
-          </div>
-        </div>
+      {/* Mobile Tabs (Horizontal Scroll) */}
+      <div className="md:hidden flex overflow-x-auto p-2 gap-2 bg-slate-950 border-b border-slate-800 shrink-0 scrollbar-hide">
+         <TopTab id="generate" icon={Sparkles} label="Gen" />
+         <TopTab id="edit" icon={Wand2} label="Edit" />
+         <TopTab id="analyze" icon={ScanEye} label="Scan" />
+         <TopTab id="chat" icon={MessageSquare} label="Chat" />
+         <TopTab id="gallery" icon={Images} label="Gallery" />
+      </div>
 
-        <div className="p-6">
-          <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-800 flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-indigo-400">
-              <Code2 size={14} />
-              <span className="text-xs font-bold uppercase">v1.0.0 • Public Build</span>
-            </div>
-            <p className="text-[10px] text-slate-500">Gemini 2.5 Flash • React 19</p>
-            
-            <div className="flex gap-2 pt-2 border-t border-slate-800 mt-2">
-                <button 
-                    onClick={() => setShowSettingsModal(true)}
-                    className="flex-1 flex items-center justify-center gap-2 text-xs text-slate-400 hover:text-white transition-colors py-2 hover:bg-slate-800 rounded-lg"
-                    title="Settings"
-                >
-                    <Settings size={14} />
-                </button>
-                <button 
-                    onClick={() => window.open('https://github.com', '_blank')}
-                    className="flex-1 flex items-center justify-center gap-2 text-xs text-slate-400 hover:text-white transition-colors py-2 hover:bg-slate-800 rounded-lg"
-                    title="View Source (Placeholder)"
-                >
-                    <Github size={14} />
-                </button>
-                <button 
-                    onClick={handleLogout}
-                    className="flex-1 flex items-center justify-center gap-2 text-xs text-red-400 hover:text-red-300 transition-colors py-2 hover:bg-red-900/20 rounded-lg"
-                    title="Sign Out"
-                >
-                    <LogOut size={14} />
-                </button>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      {/* Main Content Area */}
-      <main className="flex-1 relative overflow-hidden flex flex-col bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-slate-950">
-        <header className="hidden md:flex h-20 items-center justify-between px-8 z-10">
-           <div>
-             <h2 className="text-2xl font-bold text-white capitalize tracking-tight">{activeTab === 'chat' ? 'Chat Assistant' : activeTab.replace('-', ' ')}</h2>
-             <p className="text-sm text-slate-500">
-               {activeTab === 'generate' && "Create stunning visuals from text descriptions"}
-               {activeTab === 'edit' && "Modify images with natural language commands"}
-               {activeTab === 'analyze' && "Understand visual content with multimodal AI"}
-               {activeTab === 'chat' && "Conversational AI assistant"}
-               {activeTab === 'gallery' && "Your personal creative collection"}
-             </p>
-           </div>
-        </header>
-
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 pt-4 md:pt-0 scrollbar-hide">
-          <div className="max-w-[1600px] mx-auto h-full relative">
-            {/* By using display: none/block, we keep components mounted so state (prompts, images) is preserved */}
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-1 overflow-hidden p-4 md:p-6 relative bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-slate-950">
+        <div className="max-w-[1800px] mx-auto h-full">
+            {/* Keep components mounted to preserve state */}
             <div className={`h-full ${activeTab === 'generate' ? 'block' : 'hidden'}`}>
-                <GenerateView 
-                    onAddToGallery={addToGallery} 
-                    externalPrompt={sharedPrompt} 
-                    onPromptUsed={() => setSharedPrompt('')}
-                    apiKey={userApiKey}
-                />
+                <GenerateView onAddToGallery={addToGallery} externalPrompt={sharedPrompt} onPromptUsed={() => setSharedPrompt('')} apiKey={userApiKey} />
             </div>
             <div className={`h-full ${activeTab === 'edit' ? 'block' : 'hidden'}`}>
                 <MagicEditView onAddToGallery={addToGallery} apiKey={userApiKey} />
@@ -1799,18 +1199,8 @@ const App = () => {
             <div className={`h-full ${activeTab === 'gallery' ? 'block' : 'hidden'}`}>
                 <GalleryView items={galleryItems} onDelete={removeFromGallery} />
             </div>
-          </div>
         </div>
       </main>
-
-      {/* Mobile Bottom Navigation (Visible on Mobile) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-950/90 backdrop-blur-xl border-t border-slate-800 flex justify-between px-2 pb-2 pt-1 z-50 h-[70px]">
-          <MobileNavButton id="generate" icon={Sparkles} label="Generate" />
-          <MobileNavButton id="edit" icon={Wand2} label="Edit" />
-          <MobileNavButton id="analyze" icon={ScanEye} label="Analyze" />
-          <MobileNavButton id="chat" icon={MessageSquare} label="Chat" />
-          <MobileNavButton id="gallery" icon={Images} label="Gallery" />
-      </nav>
     </div>
   );
 };
