@@ -46,7 +46,8 @@ import {
   Github,
   Code2,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  MagicWand // Assuming lucide-react has this or similar, Wand2 is already imported
 } from 'lucide-react';
 
 // --- Types & Interfaces ---
@@ -502,13 +503,24 @@ const Lightbox = ({ src, prompt, onClose, onShare, onDelete, onUsePrompt, showDe
   );
 };
 
-const PromptArea = ({ value, onChange, placeholder, className, label, showControls = true }: any) => {
+const PromptArea = ({ value, onChange, placeholder, className, label, showControls = true, onEnhance }: any) => {
   const handleCopy = () => navigator.clipboard.writeText(value);
   const handleClear = () => onChange({ target: { value: '' } });
 
   return (
     <div className="flex flex-col gap-2">
-      {label && <label className="text-sm font-medium text-slate-300 ml-1">{label}</label>}
+      <div className="flex justify-between items-center">
+        {label && <label className="text-sm font-medium text-slate-300 ml-1">{label}</label>}
+        {onEnhance && (
+            <button 
+                onClick={onEnhance} 
+                className="text-[10px] flex items-center gap-1.5 px-2 py-1 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 rounded-md transition-colors border border-indigo-500/20"
+                title="Rewrites your prompt to be more detailed and safer for the AI"
+            >
+                <Wand2 size={12} /> Enhance Prompt
+            </button>
+        )}
+      </div>
       <div className="relative group">
         <textarea
           value={value}
@@ -620,6 +632,25 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
     setLoading(false);
   };
 
+  const handleEnhancePrompt = async () => {
+      if (!prompt.trim()) return;
+      setLoading(true);
+      try {
+        const ai = getAI(apiKey);
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `Rewrite the following image generation prompt to be highly detailed, artistic, and safe for a public AI model. Keep it under 100 words. Output ONLY the prompt, no explanations. Original Prompt: "${prompt}"`
+        });
+        if (response.text) {
+            setPrompt(response.text.trim());
+        }
+      } catch (e) {
+        console.error("Enhance failed", e);
+      } finally {
+        setLoading(false);
+      }
+  };
+
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
     
@@ -673,7 +704,7 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
 
       const candidates = response.candidates;
       if (!candidates || candidates.length === 0) {
-        throw new Error("No candidates returned. The request may have been blocked.");
+        throw new Error("No candidates returned. The request may have been blocked by the network or API.");
       }
       
       // Check for finish reason if available
@@ -689,6 +720,8 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
       }
 
       let foundImage = false;
+      let rejectionText = "";
+
       for (const part of candidates[0]?.content?.parts || []) {
         if (part.inlineData) {
           const imageUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
@@ -702,10 +735,16 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
           });
           foundImage = true;
           break;
+        } else if (part.text) {
+            // CRITICAL FIX: Capture text refusal if model talks back instead of generating image
+            rejectionText += part.text;
         }
       }
 
       if (!foundImage) {
+          if (rejectionText) {
+              throw new Error(`AI Refused: "${rejectionText.slice(0, 200)}..." (Try using the 'Enhance Prompt' button)`);
+          }
           throw new Error("Model response success, but no image data found in response.");
       }
 
@@ -717,7 +756,7 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
         // Normalize message case for checks
         const lowerMsg = msg.toLowerCase();
 
-        if (lowerMsg.includes('400')) msg = "400 Bad Request: Prompt rejected. Try removing 'Safe' words or using a cleaner prompt. (Some keys cannot use BLOCK_NONE)";
+        if (lowerMsg.includes('400')) msg = "400 Bad Request: Prompt rejected. Try using the 'Enhance Prompt' button to fix your prompt.";
         else if (lowerMsg.includes('403')) msg = "403 Forbidden: Your API Key might not support Image Generation.";
         else if (lowerMsg.includes('429') || lowerMsg.includes('quota')) msg = "429 Quota Exceeded: Server busy or too many requests. Try removing reference images or waiting a moment.";
         else if (lowerMsg.includes('safety')) msg = `Prompt Rejected: ${msg.replace('Error: ', '')}`;
@@ -783,6 +822,7 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
             label="Creative Prompt"
             value={prompt}
             onChange={(e: any) => setPrompt(e.target.value)}
+            onEnhance={handleEnhancePrompt}
             placeholder="Describe your imagination in detail..."
             className="w-full min-h-[120px] bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-slate-200 focus:ring-2 focus:ring-indigo-500 resize-none text-base"
           />
