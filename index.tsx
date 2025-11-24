@@ -37,7 +37,9 @@ import {
   Zap,
   Clock,
   AlertTriangle,
-  Menu
+  Menu,
+  Move,
+  Layers
 } from 'lucide-react';
 
 // --- Types & Interfaces ---
@@ -204,7 +206,8 @@ const IconButton = ({ onClick, icon: Icon, title, className = '', variant = 'def
   const variants = {
     default: "bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700",
     danger: "bg-red-500/20 hover:bg-red-500/40 text-red-300 hover:text-white border border-red-500/30",
-    primary: "bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-400"
+    primary: "bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-400",
+    active: "bg-indigo-600 text-white border border-indigo-400 shadow-lg shadow-indigo-500/20"
   };
   
   return (
@@ -344,7 +347,7 @@ const Lightbox = ({ src, prompt, onClose, onShare, onDelete, onUsePrompt, showDe
 };
 
 const LoginScreen = ({ onLogin }: { onLogin: (key: string) => void }) => {
-  const [key, setKey] = useState('');
+  const [key, setKey] = useState('AIzaSyAyM-xlV6kj7P0C2D2liNX3XhuaCw0BX_4');
   const [showKey, setShowKey] = useState(false);
 
   return (
@@ -483,6 +486,8 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
   const [artStyle, setArtStyle] = useState('None');
   const [lighting, setLighting] = useState('Auto');
   const [camera, setCamera] = useState('Auto');
+  const [viewMode, setViewMode] = useState<'fit' | 'original'>('fit');
+  const [modelType, setModelType] = useState<'flash' | 'imagen'>('flash');
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const [refImages, setRefImages] = useState<File[]>([]);
@@ -556,84 +561,103 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
 
     try {
       const ai = getAI(apiKey);
-      const parts: any[] = [];
-      for (const file of refImages) {
-        try {
-            const imagePart = await fileToGenerativePart(file, true);
-            parts.push(imagePart);
-        } catch (err) { console.warn("Skipping bad ref image"); }
-      }
-
       let constructedPrompt = prompt;
       if (artStyle !== 'None') constructedPrompt += `, ${artStyle} art style`;
       if (lighting !== 'Auto') constructedPrompt += `, ${lighting} lighting`;
       if (camera !== 'Auto') constructedPrompt += `, ${camera} view`;
-      if (refImages.length > 0) {
-        if (lockFace) constructedPrompt = "Strictly maintain facial structure. " + constructedPrompt;
-        else constructedPrompt = "Use reference as style guide. " + constructedPrompt;
-      }
-      parts.push({ text: constructedPrompt });
-      
-      const config: any = {
-          imageConfig: {
-            numberOfImages: 1,
-            ...(aspectRatio !== '1:1' ? { aspectRatio: aspectRatio } : {})
-          },
-          safetySettings: permissiveSafetySettings
-      };
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts },
-        config: config
-      });
+      let imageUrl = null;
 
-      if (!loading && !abortControllerRef.current) return;
+      if (modelType === 'flash') {
+          // --- GEMINI 2.5 FLASH IMAGE STRATEGY ---
+          const parts: any[] = [];
+          for (const file of refImages) {
+            try {
+                const imagePart = await fileToGenerativePart(file, true);
+                parts.push(imagePart);
+            } catch (err) { console.warn("Skipping bad ref image"); }
+          }
 
-      const candidate = response.candidates?.[0];
-      if (!candidate) {
-          if (response.promptFeedback?.blockReason) throw new Error(`Blocked: ${response.promptFeedback.blockReason}`);
-          throw new Error("No response from AI.");
-      }
-      
-      if (candidate.finishReason === 'SAFETY') {
-          const ratings = candidate.safetyRatings?.map(r => `${r.category}: ${r.probability}`).join(', ');
-          throw new Error(`Safety Block: ${ratings}`);
-      }
+          if (refImages.length > 0) {
+            if (lockFace) constructedPrompt = "Strictly maintain facial structure. " + constructedPrompt;
+            else constructedPrompt = "Use reference as style guide. " + constructedPrompt;
+          }
+          parts.push({ text: constructedPrompt });
+          
+          const config: any = {
+              imageConfig: {
+                numberOfImages: 1,
+                ...(aspectRatio !== '1:1' ? { aspectRatio: aspectRatio } : {})
+              },
+              safetySettings: permissiveSafetySettings
+          };
 
-      let foundImage = false;
-      let rejectionText = "";
-
-      for (const part of candidate?.content?.parts || []) {
-        if (part.inlineData) {
-          const mime = part.inlineData.mimeType || 'image/jpeg';
-          const imageUrl = `data:${mime};base64,${part.inlineData.data}`;
-          setGeneratedImage(imageUrl);
-          onAddToGallery({
-            id: generateId(),
-            type: 'generated',
-            src: imageUrl,
-            prompt: constructedPrompt,
-            timestamp: Date.now()
+          const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: { parts },
+            config: config
           });
-          foundImage = true;
-          break;
-        } else if (part.text) rejectionText += part.text;
+
+          if (!loading && !abortControllerRef.current) return;
+
+          const candidate = response.candidates?.[0];
+          if (!candidate) throw new Error("No response from AI.");
+          
+          if (candidate.finishReason === 'SAFETY') throw new Error(`Safety Blocked. Try a different prompt.`);
+
+          let rejectionText = "";
+          for (const part of candidate?.content?.parts || []) {
+            if (part.inlineData) {
+              const mime = part.inlineData.mimeType || 'image/jpeg';
+              imageUrl = `data:${mime};base64,${part.inlineData.data}`;
+              break;
+            } else if (part.text) rejectionText += part.text;
+          }
+          if (!imageUrl && rejectionText) throw new Error(`Model Refused: "${rejectionText}"`);
+      } else {
+          // --- IMAGEN 3 STRATEGY ---
+          const response = await ai.models.generateImages({
+            model: 'imagen-3.0-generate-001',
+            prompt: constructedPrompt,
+            config: {
+                numberOfImages: 1,
+                outputMimeType: 'image/jpeg',
+                aspectRatio: aspectRatio,
+            }
+          });
+          if (response.generatedImages?.[0]?.image?.imageBytes) {
+             imageUrl = `data:image/jpeg;base64,${response.generatedImages[0].image.imageBytes}`;
+          } else {
+             throw new Error("Imagen returned no images.");
+          }
       }
 
-      if (!foundImage) {
-          if (rejectionText) throw new Error(`AI Says: "${rejectionText}"`);
-          throw new Error("Zonk Result: No image returned. Try simpler prompt.");
-      }
+      if (!imageUrl) throw new Error("Generation failed. Try switching models.");
+
+      setGeneratedImage(imageUrl);
+      onAddToGallery({
+        id: generateId(),
+        type: 'generated',
+        src: imageUrl,
+        prompt: constructedPrompt,
+        timestamp: Date.now()
+      });
 
     } catch (error: any) {
       if (loading) {
         let msg = error.message || "Failed.";
         const lowerMsg = msg.toLowerCase();
+        
+        // Handle specific API errors
         if (lowerMsg.includes('429') || lowerMsg.includes('quota')) {
-            msg = "⚠️ Quota Exceeded. Cooling down for 60s.";
+            msg = "⚠️ Quota Exceeded. Cooling down 60s.";
             setCooldown(60);
+        } else if (lowerMsg.includes('403') || lowerMsg.includes('permission') || lowerMsg.includes('billing')) {
+            msg = "🔒 Access Denied: Check Billing or Domain restrictions on your API Key.";
+        } else if (lowerMsg.includes('400') || lowerMsg.includes('invalid')) {
+            msg = "❌ Bad Request: Model may not be supported in your region or project.";
         }
+        
         setErrorMsg(msg);
       }
     } finally {
@@ -659,14 +683,24 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
         
         {/* Left Panel: Controls */}
         <div className="glass-panel rounded-2xl flex flex-col overflow-hidden h-full shadow-2xl">
-            <div className="p-4 border-b border-white/5 bg-slate-900/50">
+            <div className="p-4 border-b border-white/5 bg-slate-900/50 flex justify-between items-center">
                 <h3 className="font-bold text-white flex items-center gap-2 text-sm tracking-wide">
                     <Wand2 size={16} className="text-indigo-400" /> GENERATOR
                 </h3>
+                <div className="relative group">
+                    <button className="text-[10px] flex items-center gap-1 px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-slate-300 transition-colors">
+                         <Layers size={12} /> {modelType === 'flash' ? 'Gemini 2.5 Flash' : 'Imagen 3'}
+                    </button>
+                    <div className="absolute right-0 top-full mt-2 w-40 bg-slate-900 border border-white/10 rounded-lg shadow-xl overflow-hidden hidden group-hover:block z-50">
+                        <button onClick={() => setModelType('flash')} className={`w-full text-left px-3 py-2 text-xs hover:bg-indigo-500/20 ${modelType === 'flash' ? 'text-indigo-400' : 'text-slate-400'}`}>Gemini 2.5 Flash (Default)</button>
+                        <button onClick={() => setModelType('imagen')} className={`w-full text-left px-3 py-2 text-xs hover:bg-indigo-500/20 ${modelType === 'imagen' ? 'text-indigo-400' : 'text-slate-400'}`}>Imagen 3 (Alternative)</button>
+                    </div>
+                </div>
             </div>
             
             <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-6 scrollbar-hide">
-                {/* Reference Images */}
+                {/* Reference Images - Only for Flash */}
+                {modelType === 'flash' && (
                 <div className="flex flex-col gap-3">
                     <div className="flex justify-between items-center">
                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Reference (Auto-Compress)</label>
@@ -692,6 +726,7 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
                         </button>
                     )}
                 </div>
+                )}
 
                 {/* Prompt */}
                 <div className="flex-1 min-h-[140px]">
@@ -760,9 +795,30 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
         </div>
 
         {/* Right Panel: Result Preview */}
-        <div className="glass-panel rounded-2xl relative overflow-hidden flex items-center justify-center group h-full shadow-2xl bg-[#080808]">
-          {loading && <LoadingOverlay message="Weaving pixels..." onStop={handleStop} />}
+        <div className="glass-panel rounded-2xl relative overflow-hidden flex flex-col group h-full shadow-2xl bg-[#080808]">
+          {loading && <LoadingOverlay message={modelType === 'imagen' ? 'Imagen 3 Dreaming...' : 'Gemini Weaving...'} onStop={handleStop} />}
           
+          {/* Result Header Toolbar */}
+           <div className="absolute top-4 right-4 left-4 z-20 flex justify-between items-start pointer-events-none">
+              <div className="pointer-events-auto">
+                  {generatedImage && (
+                    <div className="flex bg-black/60 backdrop-blur-md rounded-lg border border-white/10 p-1">
+                        <button onClick={() => setViewMode('fit')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'fit' ? 'bg-white/20 text-white' : 'text-slate-400 hover:text-white'}`}>Fit</button>
+                        <button onClick={() => setViewMode('original')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'original' ? 'bg-white/20 text-white' : 'text-slate-400 hover:text-white'}`}>100%</button>
+                    </div>
+                  )}
+              </div>
+              <div className="flex gap-2 pointer-events-auto">
+                {generatedImage && (
+                   <>
+                    <IconButton onClick={() => generatedImage && shareImage(generatedImage, 'Generated', prompt)} icon={Share2} className="bg-black/50 backdrop-blur" />
+                    <a href={generatedImage} download={`gemini-gen-${Date.now()}.png`} className="p-2 rounded-lg bg-black/50 backdrop-blur hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-white/10"><Download size={18} /></a>
+                   </>
+                )}
+                <IconButton onClick={() => {setGeneratedImage(null); setErrorMsg(null);}} icon={X} variant="danger" className="backdrop-blur" />
+              </div>
+           </div>
+
           {errorMsg && !loading && (
              <div className="absolute inset-0 z-40 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm">
                  <div className="glass-panel border border-red-500/30 rounded-xl p-8 max-w-sm text-center flex flex-col items-center shadow-2xl bg-slate-900/90">
@@ -770,32 +826,42 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
                      <h3 className="text-white font-bold mb-2 text-lg">Generation Failed</h3>
                      <p className="text-red-200/70 text-sm mb-6 leading-relaxed">{errorMsg}</p>
                      <Button variant="outline" onClick={() => setErrorMsg(null)} size="sm" className="w-full border-red-500/30 hover:bg-red-500/10 text-red-300">Dismiss</Button>
+                     
+                     {errorMsg.includes('Access Denied') && (
+                         <div className="mt-4 text-[10px] text-slate-500 text-left p-3 bg-black/50 rounded border border-white/5">
+                            <strong>Fix it:</strong> Go to Google Cloud Console &gt; APIs &gt; Credentials. Edit your API Key. Under "Application restrictions", add your Netlify URL or set to "None".
+                         </div>
+                     )}
                  </div>
              </div>
           )}
 
-          {generatedImage ? (
-            <div className="relative w-full h-full flex flex-col bg-[url('https://grainy-gradients.vercel.app/noise.svg')]">
-              <div className="absolute top-4 right-4 z-20 flex gap-2">
-                  <IconButton onClick={() => generatedImage && shareImage(generatedImage, 'Generated', prompt)} icon={Share2} className="bg-black/50 backdrop-blur" />
-                  <a href={generatedImage} download={`gemini-gen-${Date.now()}.png`} className="p-2 rounded-lg bg-black/50 backdrop-blur hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-white/10"><Download size={18} /></a>
-                  <IconButton onClick={() => setGeneratedImage(null)} icon={X} variant="danger" className="backdrop-blur" />
-              </div>
+          <div className={`flex-1 relative w-full h-full flex items-center justify-center bg-[url('https://grainy-gradients.vercel.app/noise.svg')] ${viewMode === 'original' ? 'overflow-auto' : 'overflow-hidden'}`}>
+            {generatedImage ? (
+                <div className={`relative ${viewMode === 'original' ? 'p-8 min-w-max min-h-max' : 'w-full h-full p-6 flex items-center justify-center'}`}>
+                    <img 
+                        src={generatedImage} 
+                        className={`
+                           ${viewMode === 'fit' ? 'max-w-full max-h-full object-contain' : 'max-w-none cursor-grab active:cursor-grabbing'}
+                           rounded-lg shadow-2xl drop-shadow-2xl
+                        `}
+                        onClick={() => viewMode === 'fit' && setShowZoom(true)}
+                        style={viewMode === 'fit' ? {cursor: 'zoom-in'} : {}}
+                    />
+                </div>
+            ) : !errorMsg && (
+                <div className="text-center text-slate-600 p-8 flex flex-col items-center">
+                <div className="w-20 h-20 rounded-full bg-slate-900/50 flex items-center justify-center mb-4 border border-white/5">
+                    <Sparkles className="w-8 h-8 opacity-20 text-indigo-500" />
+                </div>
+                <p className="text-sm font-medium text-slate-500">Result will appear here</p>
+                </div>
+            )}
+          </div>
               
-              <div className="flex-1 p-6 flex items-center justify-center cursor-zoom-in" onClick={() => setShowZoom(true)}>
-                  <img src={generatedImage} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl drop-shadow-2xl" />
-              </div>
-              
-              <div className="p-3 bg-black/60 backdrop-blur-md text-center border-t border-white/5">
-                   <p className="text-[10px] text-slate-400 font-mono tracking-widest uppercase">Click image to fullscreen</p>
-              </div>
-            </div>
-          ) : !errorMsg && (
-            <div className="text-center text-slate-600 p-8 flex flex-col items-center">
-              <div className="w-20 h-20 rounded-full bg-slate-900/50 flex items-center justify-center mb-4 border border-white/5">
-                <Sparkles className="w-8 h-8 opacity-20 text-indigo-500" />
-              </div>
-              <p className="text-sm font-medium text-slate-500">Result will appear here</p>
+          {generatedImage && viewMode === 'fit' && (
+            <div className="p-3 bg-black/60 backdrop-blur-md text-center border-t border-white/5 shrink-0 z-10 relative">
+                   <p className="text-[10px] text-slate-400 font-mono tracking-widest uppercase">Click image for full screen • Switch to 100% to scroll</p>
             </div>
           )}
         </div>
@@ -813,6 +879,7 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
   const [showZoom, setShowZoom] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
+  const [viewMode, setViewMode] = useState<'fit' | 'original'>('fit');
 
   useEffect(() => {
     let interval: any;
@@ -847,6 +914,8 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
       
       const candidate = response.candidates?.[0];
       if (!candidate) throw new Error("No response.");
+      
+      if (candidate.finishReason === 'SAFETY') throw new Error("Safety Block blocked the edit.");
 
       let found = false;
       let rejectionText = "";
@@ -868,13 +937,19 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
       }
       
       if (!found) {
-          if (rejectionText) throw new Error(`AI Says: ${rejectionText}`);
-          throw new Error("Zonk Result.");
+          if (rejectionText) throw new Error(`AI Refused Edit: "${rejectionText}"`);
+          throw new Error("No image returned. Try a clearer prompt.");
       }
 
     } catch (error: any) {
        let msg = error.message || "Failed.";
-       if (msg.includes('429')) { msg = "⚠️ Quota Exceeded. Cooldown 60s."; setCooldown(60); }
+       const lowerMsg = msg.toLowerCase();
+       if (lowerMsg.includes('429')) { 
+           msg = "⚠️ Quota Exceeded. Cooldown 60s."; 
+           setCooldown(60); 
+       } else if (lowerMsg.includes('403') || lowerMsg.includes('billing')) {
+           msg = "🔒 Access Denied: Check Billing or Domain Restrictions on API Key.";
+       }
        setErrorMsg(msg);
     } finally {
       setLoading(false);
@@ -950,27 +1025,46 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
       </div>
 
       {/* Result Panel */}
-      <div className="glass-panel rounded-2xl flex items-center justify-center relative overflow-hidden h-full shadow-2xl bg-[#080808]">
+      <div className="glass-panel rounded-2xl flex flex-col relative overflow-hidden h-full shadow-2xl bg-[#080808]">
         {loading && <LoadingOverlay message="Transforming..." />}
-        {errorMsg && !loading && (
-             <div className="absolute inset-0 z-40 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm">
-                 <div className="glass-panel border border-red-500/30 rounded-xl p-6 text-center max-w-sm">
-                     <p className="text-red-300 text-sm">{errorMsg}</p>
-                     <button onClick={() => setErrorMsg(null)} className="mt-4 text-xs bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-lg text-red-200 hover:bg-red-500/20">Dismiss</button>
-                 </div>
+        
+        {/* Result Toolbar */}
+        <div className="absolute top-4 right-4 left-4 z-20 flex justify-between items-start pointer-events-none">
+             <div className="pointer-events-auto">
+                 {resultImage && (
+                   <div className="flex bg-black/60 backdrop-blur-md rounded-lg border border-white/10 p-1">
+                       <button onClick={() => setViewMode('fit')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'fit' ? 'bg-white/20 text-white' : 'text-slate-400 hover:text-white'}`}>Fit</button>
+                       <button onClick={() => setViewMode('original')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'original' ? 'bg-white/20 text-white' : 'text-slate-400 hover:text-white'}`}>100%</button>
+                   </div>
+                 )}
              </div>
-        )}
+             {errorMsg && !loading && (
+                 <div className="pointer-events-auto bg-red-900/80 border border-red-500/30 rounded-lg px-4 py-2 text-red-200 text-xs">
+                    {errorMsg} <button onClick={() => setErrorMsg(null)} className="ml-2 font-bold">X</button>
+                 </div>
+             )}
+        </div>
 
-        {resultImage ? (
-          <div className="w-full h-full flex items-center justify-center cursor-zoom-in p-6" onClick={() => setShowZoom(true)}>
-             <img src={resultImage} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
-          </div>
-        ) : (
-          <div className="text-center text-slate-600">
-            <Wand2 className="w-12 h-12 mx-auto mb-4 opacity-20" />
-            <p className="text-sm font-medium">Magic awaits...</p>
-          </div>
-        )}
+        <div className={`flex-1 relative w-full h-full flex items-center justify-center bg-[url('https://grainy-gradients.vercel.app/noise.svg')] ${viewMode === 'original' ? 'overflow-auto' : 'overflow-hidden'}`}>
+            {resultImage ? (
+                <div className={`relative ${viewMode === 'original' ? 'p-8 min-w-max min-h-max' : 'w-full h-full p-6 flex items-center justify-center'}`}>
+                    <img 
+                        src={resultImage} 
+                        className={`
+                           ${viewMode === 'fit' ? 'max-w-full max-h-full object-contain' : 'max-w-none cursor-grab'}
+                           rounded-lg shadow-2xl drop-shadow-2xl
+                        `}
+                        onClick={() => viewMode === 'fit' && setShowZoom(true)}
+                        style={viewMode === 'fit' ? {cursor: 'zoom-in'} : {}}
+                    />
+                </div>
+            ) : (
+            <div className="text-center text-slate-600">
+                <Wand2 className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                <p className="text-sm font-medium">Magic awaits...</p>
+            </div>
+            )}
+        </div>
       </div>
     </div>
   );
@@ -1139,7 +1233,7 @@ const App = () => {
   const [activeTab, setActiveTab] = useState('generate');
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
   const [sharedPrompt, setSharedPrompt] = useState('');
-  const [userApiKey, setUserApiKey] = useState(() => localStorage.getItem('user_gemini_api_key') || '');
+  const [userApiKey, setUserApiKey] = useState(() => localStorage.getItem('user_gemini_api_key') || 'AIzaSyAyM-xlV6kj7P0C2D2liNX3XhuaCw0BX_4');
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   const saveApiKey = (key: string) => { localStorage.setItem('user_gemini_api_key', key); setUserApiKey(key); setShowSettingsModal(false); };
