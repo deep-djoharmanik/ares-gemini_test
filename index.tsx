@@ -47,7 +47,7 @@ import {
   Code2,
   AlertTriangle,
   RefreshCw,
-  MagicWand // Assuming lucide-react has this or similar, Wand2 is already imported
+  Info
 } from 'lucide-react';
 
 // --- Types & Interfaces ---
@@ -71,8 +71,9 @@ interface ChatMessage {
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-// NEW: Image Compression Helper to reduce Token Usage and prevent 429 Errors
-const compressImage = async (file: File, maxWidth = 800, quality = 0.8): Promise<string> => {
+// NEW: Aggressive Image Compression to solve "Quota Exceeded" (429) and Bandwidth issues
+// Reduced default maxWidth to 384px. This brings payload size down to ~100KB-200KB.
+const compressImage = async (file: File, maxWidth = 384, quality = 0.6): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -108,8 +109,8 @@ const compressImage = async (file: File, maxWidth = 800, quality = 0.8): Promise
 
 const fileToGenerativePart = async (file: File, isImageForGeneration = false) => {
   if (isImageForGeneration && file.type.startsWith('image/')) {
-    // Use compression for generation tasks to save tokens
-    const base64String = await compressImage(file);
+    // Use aggressive compression for generation tasks to save token quota
+    const base64String = await compressImage(file, 384, 0.6);
     return {
       inlineData: {
         data: base64String,
@@ -117,7 +118,7 @@ const fileToGenerativePart = async (file: File, isImageForGeneration = false) =>
       },
     };
   } else {
-    // Standard raw read for analysis or small files
+    // Standard raw read for analysis (can be larger, but still risky on free tier)
     return new Promise<{ inlineData: { data: string; mimeType: string } }>((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -173,13 +174,12 @@ const shareImage = async (dataUrl: string, title: string, text: string) => {
 
 // --- API Management ---
 
-// We no longer use a global static instance. We create one on demand with the user's key.
 const getAI = (apiKey: string) => {
   if (!apiKey) throw new Error("API Key is missing");
   return new GoogleGenAI({ apiKey: apiKey.trim() });
 };
 
-// Standard permissive settings
+// Optimized Safety Settings to avoid false positive blocks
 const permissiveSafetySettings = [
   { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
   { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
@@ -637,15 +637,17 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
       setLoading(true);
       try {
         const ai = getAI(apiKey);
+        // Use gemini-2.5-flash for text logic - very reliable
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: `Rewrite the following image generation prompt to be highly detailed, artistic, and safe for a public AI model. Keep it under 100 words. Output ONLY the prompt, no explanations. Original Prompt: "${prompt}"`
+            contents: `You are a prompt engineer. Rewrite the following prompt to be detailed, artistic, and descriptive, but keep it safe (PG-13). Output ONLY the prompt text. Input: "${prompt}"`
         });
         if (response.text) {
             setPrompt(response.text.trim());
         }
       } catch (e) {
         console.error("Enhance failed", e);
+        setErrorMsg("Failed to enhance prompt. Check your connection or API key.");
       } finally {
         setLoading(false);
       }
@@ -662,69 +664,85 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
     try {
       const ai = getAI(apiKey);
       const parts: any[] = [];
+      
+      // Process Reference Images
       for (const file of refImages) {
-        // Use isImageForGeneration = true to trigger compression
+        // IMPORTANT: Uses isImageForGeneration=true to trigger aggressive 384px compression
         const imagePart = await fileToGenerativePart(file, true);
         parts.push(imagePart);
       }
 
-      // Construct detailed prompt based on settings
+      // Construct Prompt
       let constructedPrompt = prompt;
       
       if (artStyle !== 'None') constructedPrompt += `, ${artStyle} art style`;
       if (lighting !== 'Auto') constructedPrompt += `, ${lighting} lighting`;
       if (camera !== 'Auto') constructedPrompt += `, ${camera} view`;
-      if (quality === 'High (2k)') constructedPrompt += `, highly detailed, 4k resolution, sharp focus, masterpiece`;
-
+      
+      // Append reference instructions
       if (refImages.length > 0) {
         if (lockFace) {
-          constructedPrompt = "Strictly maintain 100% facial identity, structure, and features consistent with the provided reference image(s). " + constructedPrompt;
+          constructedPrompt = "Strictly maintain facial structure and identity from reference. " + constructedPrompt;
         } else {
-          // Explicit instruction for reference usage to avoid model confusion/safety trigger
-          constructedPrompt = "Use the provided image(s) as a visual reference for composition and style. " + constructedPrompt;
+          constructedPrompt = "Use the image as a style reference only. " + constructedPrompt;
         }
       }
       
       parts.push({ text: constructedPrompt });
       
+      // Config Construction
+      const config: any = {
+          imageConfig: {
+            numberOfImages: 1,
+            // Only send aspect ratio if strictly needed, to avoid some model bugs
+            ...(aspectRatio !== '1:1' ? { aspectRatio: aspectRatio } : {})
+          },
+          safetySettings: permissiveSafetySettings
+      };
+
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: { parts },
-        config: {
-          imageConfig: {
-            aspectRatio: aspectRatio as any,
-            numberOfImages: 1
-          },
-          // Try with permissive settings first
-          safetySettings: permissiveSafetySettings
-        }
+        config: config
       });
 
       if (!loading && !abortControllerRef.current) return;
 
+      // --- ROBUST RESPONSE PARSING ---
+      // Check candidates exist
       const candidates = response.candidates;
       if (!candidates || candidates.length === 0) {
-        throw new Error("No candidates returned. The request may have been blocked by the network or API.");
+          // If no candidates, check prompt feedback if available or just throw generic
+          if (response.promptFeedback?.blockReason) {
+               throw new Error(`Prompt Blocked: ${response.promptFeedback.blockReason}`);
+          }
+          throw new Error("No response candidates received from AI.");
       }
       
-      // Check for finish reason if available
-      if (candidates[0].finishReason && candidates[0].finishReason !== 'STOP') {
-         if (candidates[0].finishReason === 'SAFETY') {
-             // Extract detailed safety info if possible
-             const ratings = candidates[0].safetyRatings?.map(r => `${r.category}: ${r.probability}`).join(', ');
-             throw new Error(`Generation blocked by safety filters. (${ratings || 'Unknown Category'})`);
+      const candidate = candidates[0];
+
+      // Check Finish Reason
+      if (candidate.finishReason && candidate.finishReason !== 'STOP') {
+         if (candidate.finishReason === 'SAFETY') {
+             const ratings = candidate.safetyRatings?.map(r => `${r.category}: ${r.probability}`).join(', ');
+             throw new Error(`Generation blocked by Safety Filters. (${ratings || 'Try enhancing your prompt'})`);
          }
-         if (candidates[0].finishReason === 'OTHER') {
-             throw new Error("Generation failed (FinishReason: OTHER). This model may be temporarily unavailable or the prompt is too complex.");
+         // Handle 'OTHER' which often happens on refusals
+         if (candidate.finishReason === 'OTHER') {
+             // continue to check for text part, often contains the refusal message
+         } else {
+             throw new Error(`Generation stopped: ${candidate.finishReason}`);
          }
       }
 
       let foundImage = false;
       let rejectionText = "";
 
-      for (const part of candidates[0]?.content?.parts || []) {
+      // Iterate ALL parts to find image or text refusal
+      for (const part of candidate?.content?.parts || []) {
         if (part.inlineData) {
-          const imageUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
+          const mime = part.inlineData.mimeType || 'image/jpeg';
+          const imageUrl = `data:${mime};base64,${part.inlineData.data}`;
           setGeneratedImage(imageUrl);
           onAddToGallery({
             id: generateId(),
@@ -736,30 +754,34 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
           foundImage = true;
           break;
         } else if (part.text) {
-            // CRITICAL FIX: Capture text refusal if model talks back instead of generating image
             rejectionText += part.text;
         }
       }
 
       if (!foundImage) {
           if (rejectionText) {
-              throw new Error(`AI Refused: "${rejectionText.slice(0, 200)}..." (Try using the 'Enhance Prompt' button)`);
+              throw new Error(`AI Refusal: "${rejectionText.slice(0, 200)}..."`);
           }
-          throw new Error("Model response success, but no image data found in response.");
+          throw new Error("Success response, but no image data found. (Zonk Result)");
       }
 
     } catch (error: any) {
       if (loading) {
         console.error("Generation Error:", error);
-        // Extract useful error info
+        
         let msg = error.message || "Failed to generate image.";
-        // Normalize message case for checks
         const lowerMsg = msg.toLowerCase();
 
-        if (lowerMsg.includes('400')) msg = "400 Bad Request: Prompt rejected. Try using the 'Enhance Prompt' button to fix your prompt.";
-        else if (lowerMsg.includes('403')) msg = "403 Forbidden: Your API Key might not support Image Generation.";
-        else if (lowerMsg.includes('429') || lowerMsg.includes('quota')) msg = "429 Quota Exceeded: Server busy or too many requests. Try removing reference images or waiting a moment.";
-        else if (lowerMsg.includes('safety')) msg = `Prompt Rejected: ${msg.replace('Error: ', '')}`;
+        // Friendly Error Mapping
+        if (lowerMsg.includes('400')) {
+            msg = "400 Bad Request: Prompt rejected by filter or invalid request.";
+        } else if (lowerMsg.includes('403')) {
+            msg = "403 Forbidden: Your API Key may not have access to Image Generation.";
+        } else if (lowerMsg.includes('429') || lowerMsg.includes('quota')) {
+            msg = "⚠️ Quota Exceeded / Cooling Down. Please wait 60 seconds before trying again.";
+        } else if (lowerMsg.includes('safety')) {
+            msg = `Safety Block: ${msg.replace('Error: ', '')}`;
+        }
 
         setErrorMsg(msg);
       }
@@ -788,7 +810,10 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
           {/* Reference Images */}
           <div className="flex flex-col gap-3">
              <div className="flex justify-between items-center">
-                <label className="text-sm font-semibold text-slate-300">Reference Images</label>
+                <label className="text-sm font-semibold text-slate-300 flex items-center gap-2">
+                    Reference Images
+                    <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400 font-normal">Auto-compressed</span>
+                </label>
                 <span className="text-xs text-slate-500">{refImages.length}/4</span>
              </div>
              
@@ -810,7 +835,7 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
 
              {refImages.length > 0 && (
                 <button onClick={() => setLockFace(!lockFace)} className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${lockFace ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
-                  {lockFace ? <Lock size={14} /> : <Unlock size={14} />} {lockFace ? 'Lock Face 100%' : 'Reference Style'}
+                  {lockFace ? <Lock size={14} /> : <Unlock size={14} />} {lockFace ? 'Lock Face 100%' : 'Style Reference Only'}
                 </button>
              )}
           </div>
@@ -915,13 +940,20 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
           {loading && <LoadingOverlay message="Weaving pixels together..." onStop={handleStop} />}
           
           {errorMsg && !loading && (
-             <div className="absolute inset-0 z-40 flex items-center justify-center p-6 bg-slate-900/90">
-                 <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-6 max-w-md text-center flex flex-col items-center animate-fade-in">
-                     <AlertTriangle className="text-red-400 w-10 h-10 mb-3" />
-                     <h3 className="text-red-200 font-bold mb-2">Generation Failed</h3>
-                     <p className="text-red-300/80 text-sm mb-4">{errorMsg}</p>
-                     <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => setErrorMsg(null)}>Dismiss</Button>
+             <div className="absolute inset-0 z-40 flex items-center justify-center p-6 bg-slate-900/95 backdrop-blur-sm">
+                 <div className="bg-slate-900 border border-red-500/30 rounded-xl p-8 max-w-md text-center flex flex-col items-center animate-fade-in shadow-2xl">
+                     <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-4">
+                        <AlertTriangle className="text-red-400 w-8 h-8" />
+                     </div>
+                     <h3 className="text-white font-bold text-lg mb-2">Generation Failed</h3>
+                     <p className="text-red-200/80 text-sm mb-6 leading-relaxed">{errorMsg}</p>
+                     <div className="flex gap-3 w-full">
+                        <Button variant="outline" onClick={() => setErrorMsg(null)} className="flex-1">Close</Button>
+                        {errorMsg.includes('Quota') ? (
+                             <Button variant="primary" disabled className="flex-1 opacity-70">Wait 60s...</Button>
+                        ) : (
+                             <Button variant="primary" onClick={handleEnhancePrompt} icon={Wand2} className="flex-1">Fix Prompt</Button>
+                        )}
                      </div>
                  </div>
              </div>
@@ -958,7 +990,10 @@ const GenerateView = ({ onAddToGallery, externalPrompt, onPromptUsed, apiKey }: 
                 <Sparkles className="w-10 h-10 text-indigo-500/40" />
               </div>
               <h3 className="text-xl font-medium text-slate-500 mb-2">Ready to Create</h3>
-              <p className="text-slate-600 max-w-sm">Enter a detailed prompt, upload references, and let AI generate visual art.</p>
+              <p className="text-slate-600 max-w-sm text-sm">
+                  Enter a detailed prompt, upload references, and let AI generate visual art.<br/>
+                  <span className="text-indigo-500/50 text-xs mt-2 block">Pro Tip: Click the wand icon to enhance simple prompts.</span>
+              </p>
             </div>
           )}
         </div>
@@ -1015,7 +1050,7 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
 
     try {
       const ai = getAI(apiKey);
-      // Use isImageForGeneration = true to trigger compression
+      // Use isImageForGeneration = true to trigger compression to 384px
       const imagePart = await fileToGenerativePart(image, true);
       
       const response = await ai.models.generateContent({
@@ -1027,13 +1062,13 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
           ]
         },
         config: {
-           safetySettings: permissiveSafetySettings // Essential for image modifications
+           safetySettings: permissiveSafetySettings
         }
       });
       
       const candidates = response.candidates;
       if (!candidates || candidates.length === 0) {
-        throw new Error("No candidates returned.");
+        throw new Error("No response from AI service.");
       }
 
       if (candidates[0].finishReason === 'SAFETY') {
@@ -1042,6 +1077,8 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
       }
 
       let found = false;
+      let rejectionText = "";
+
       for (const part of response.candidates?.[0]?.content?.parts || []) {
         if (part.inlineData) {
           const imageUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
@@ -1055,9 +1092,17 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
           });
           found = true;
           break;
+        } else if (part.text) {
+            rejectionText += part.text;
         }
       }
-      if (!found) throw new Error("No image data in response.");
+      
+      if (!found) {
+           if (rejectionText) {
+              throw new Error(`AI Refused: "${rejectionText.slice(0, 300)}..."`);
+          }
+          throw new Error("No image returned. Try a different prompt.");
+      }
 
     } catch (error: any) {
       console.error(error);
@@ -1065,7 +1110,7 @@ const MagicEditView = ({ onAddToGallery, apiKey }: { onAddToGallery: (item: Gall
        const lowerMsg = msg.toLowerCase();
        if (lowerMsg.includes('400')) msg = "400 Bad Request: Check API Key or Prompt.";
        else if (lowerMsg.includes('403')) msg = "403 Forbidden: API Key invalid for this model.";
-       else if (lowerMsg.includes('429') || lowerMsg.includes('quota')) msg = "429 Quota Exceeded: The image is too large for the free quota. Compression has been applied, please try again.";
+       else if (lowerMsg.includes('429') || lowerMsg.includes('quota')) msg = "429 Quota Exceeded: Image too large. Compressing...";
        else if (lowerMsg.includes('safety')) msg = `Safety Block: ${msg.replace('Error: ', '')}`;
        
        setErrorMsg(msg);
